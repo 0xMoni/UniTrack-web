@@ -1,7 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ThemeToggle from './ThemeToggle';
+
+const LOADING_MESSAGES = [
+  'Connecting to ERP...',
+  'Sneaking into the server room...',
+  'Bribing the ERP hamsters...',
+  'Praying to the attendance gods...',
+  'Calculating bunkable lectures...',
+  'Dodging the proxy attendance check...',
+  'Hacking the mainframe... jk',
+  'Loading faster than your 8am lecture...',
+  'Asking your professor nicely...',
+  'This is still faster than the ERP itself...',
+  'Finding who has 100% attendance...',
+  'Almost there, don\'t refresh...',
+  'Your ERP really is this slow...',
+  'Counting every lecture you slept through...',
+];
 
 interface LoginFormProps {
   onSubmit: (erpUrl: string, username: string, password: string) => void;
@@ -16,6 +33,18 @@ export default function LoginForm({ onSubmit, isLoading, savedUsername, savedErp
   const [erpUrl, setErpUrl] = useState(savedErpUrl || '');
   const [username, setUsername] = useState(savedUsername || '');
   const [password, setPassword] = useState('');
+  const [msgIndex, setMsgIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setMsgIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setMsgIndex(i => (i + 1) % LOADING_MESSAGES.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +81,7 @@ export default function LoginForm({ onSubmit, isLoading, savedUsername, savedErp
               id="erpUrl"
               value={erpUrl}
               onChange={(e) => setErpUrl(e.target.value)}
-              placeholder="https://erp.yourcollege.ac.in/login.htm"
+              placeholder="https://erp.yourcollege.ac.in"
               autoComplete="url"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 outline-none transition-all text-sm"
               required
@@ -105,7 +134,7 @@ export default function LoginForm({ onSubmit, isLoading, savedUsername, savedErp
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                Connecting to ERP...
+                {LOADING_MESSAGES[msgIndex]}
               </span>
             ) : (
               'Fetch My Attendance'
