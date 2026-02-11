@@ -1,6 +1,6 @@
 # UniTrack
 
-Track your university attendance from any JUNO Campus ERP. Know exactly which classes you can skip and which ones you must attend.
+Track your university attendance from any ERP portal. Know exactly which classes you can skip and which ones you must attend.
 
 ## Features
 
