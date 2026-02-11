@@ -5,19 +5,20 @@ import ThemeToggle from './ThemeToggle';
 
 const LOADING_MESSAGES = [
   'Connecting to ERP...',
-  'Sneaking into the server room...',
-  'Bribing the ERP hamsters...',
   'Praying to the attendance gods...',
+  'Bribing the ERP hamsters...',
+  'Sneaking into the server room...',
   'Calculating bunkable lectures...',
-  'Dodging the proxy attendance check...',
   'Hacking the mainframe... jk',
   'Loading faster than your 8am lecture...',
-  'Asking your professor nicely...',
+  'Dodging the proxy attendance check...',
   'This is still faster than the ERP itself...',
-  'Finding who has 100% attendance...',
-  'Almost there, don\'t refresh...',
-  'Your ERP really is this slow...',
+  'Begging the server to respond...',
   'Counting every lecture you slept through...',
+  'Your ERP runs on a potato btw...',
+  'Asking your professor nicely...',
+  'Finding who has 100% attendance... nobody',
+  'Almost there, don\'t refresh...',
 ];
 
 interface LoginFormProps {
