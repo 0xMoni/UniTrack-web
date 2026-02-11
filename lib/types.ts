@@ -19,12 +19,6 @@ export interface AttendanceData {
   threshold: number;
 }
 
-export interface LoginCredentials {
-  erpUrl: string;
-  username: string;
-  password: string;
-}
-
 export interface FetchResponse {
   success: boolean;
   data?: AttendanceData;
@@ -32,3 +26,6 @@ export interface FetchResponse {
 }
 
 export type StatusFilter = 'all' | 'safe' | 'critical' | 'low';
+
+// Map of day (0=Mon..5=Sat) to array of subject codes in order
+export type Timetable = Record<number, string[]>;

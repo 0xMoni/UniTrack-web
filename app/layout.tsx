@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UniTrack - Universal Attendance Tracker",
-  description: "Track your university attendance across multiple ERP systems",
+  title: "UniTrack - Attendance Tracker",
+  description: "Track your university attendance from any JUNO Campus ERP",
   manifest: "/manifest.json",
 };
 

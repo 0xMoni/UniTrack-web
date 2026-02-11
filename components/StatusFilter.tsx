@@ -3,16 +3,10 @@
 import { StatusFilter as StatusFilterType } from '@/lib/types';
 import { getStatusColor } from '@/lib/utils';
 
-interface StatusCount {
-  safe: number;
-  critical: number;
-  low: number;
-}
-
 interface StatusFilterProps {
   activeFilter: StatusFilterType;
   onFilterChange: (filter: StatusFilterType) => void;
-  counts: StatusCount;
+  counts: { safe: number; critical: number; low: number };
 }
 
 const filters: { key: StatusFilterType; label: string }[] = [
@@ -39,10 +33,10 @@ export default function StatusFilter({ activeFilter, onFilterChange, counts }: S
             key={key}
             onClick={() => onFilterChange(key)}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all
+              flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all
               ${isActive
-                ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/50'
               }
             `}
           >
@@ -51,10 +45,10 @@ export default function StatusFilter({ activeFilter, onFilterChange, counts }: S
             )}
             <span>{label}</span>
             <span className={`
-              text-sm px-2 py-0.5 rounded-lg
+              text-xs px-1.5 py-0.5 rounded-md tabular-nums
               ${isActive
-                ? 'bg-white/20 dark:bg-gray-900/20'
-                : 'bg-gray-200 dark:bg-gray-700'
+                ? 'bg-white/20 dark:bg-slate-900/20'
+                : 'bg-slate-200 dark:bg-slate-700/50'
               }
             `}>
               {count}
