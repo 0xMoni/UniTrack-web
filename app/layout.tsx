@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "UniTrack - Attendance Tracker",
-  description: "Track your university attendance from any JUNO Campus ERP",
+  description: "Track your university attendance from any ERP portal",
   manifest: "/manifest.json",
 };
 
