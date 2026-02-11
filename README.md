@@ -18,6 +18,17 @@ Track your university attendance from any ERP portal. Know exactly which classes
 
 ```bash
 npm install
+```
+
+Create a `.env.local` file with your Gemini API key (needed for generic ERP support and timetable scanning):
+
+```
+GEMINI_API_KEY=your_key_here
+```
+
+Then run the dev server:
+
+```bash
 npm run dev
 ```
 
