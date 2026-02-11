@@ -2,6 +2,8 @@
 
 Track your university attendance from any ERP portal. Know exactly which classes you can skip and which ones you must attend.
 
+**Live at [unitrack-web.vercel.app](https://unitrack-web.vercel.app)**
+
 ## Features
 
 - **Attendance Dashboard** — Live attendance data with per-subject breakdowns
