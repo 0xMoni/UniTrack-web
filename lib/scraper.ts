@@ -74,16 +74,28 @@ export async function scrapeAttendance(
   const jar = new CookieJar();
 
   // Strategy 1: Try JUNO ERP endpoints (fast, no Gemini cost)
-  const junoResult = await tryJunoFlow(erpBase, jar, username, password, threshold);
-  if (junoResult) return junoResult;
+  let junoError = '';
+  try {
+    const junoResult = await tryJunoFlow(erpBase, jar, username, password, threshold);
+    if (junoResult) return junoResult;
+    junoError = 'Not a JUNO ERP';
+  } catch (e) {
+    junoError = e instanceof Error ? e.message : 'Unknown error';
+  }
 
   // Strategy 2: Generic login + crawl + Gemini parse
-  const genericResult = await tryGenericFlow(erpBase, new CookieJar(), username, password, threshold);
-  if (genericResult) return genericResult;
+  let genericError = '';
+  try {
+    const genericResult = await tryGenericFlow(erpBase, new CookieJar(), username, password, threshold);
+    if (genericResult) return genericResult;
+    genericError = 'Generic flow returned no data';
+  } catch (e) {
+    genericError = e instanceof Error ? e.message : 'Unknown error';
+  }
 
   return {
     success: false,
-    error: 'Could not fetch attendance data. Your ERP portal may use a login flow we don\'t support yet.',
+    error: `Could not fetch attendance data — JUNO: ${junoError} | Generic: ${genericError}`,
   };
 }
 
