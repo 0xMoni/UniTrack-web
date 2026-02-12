@@ -96,11 +96,20 @@ async function tryJunoFlow(
   password: string,
   threshold: number
 ): Promise<ScraperResult | null> {
+  // Step 1: Check if this is a JUNO ERP by trying the login page
+  let loginPage: Response;
   try {
-    // Step 1: Get login page for initial session cookie
-    const loginPage = await fetch(`${erpBase}/login.htm`, { cache: 'no-store' });
-    jar.update(loginPage);
+    loginPage = await fetch(`${erpBase}/login.htm`, { cache: 'no-store' });
+  } catch {
+    return null; // not reachable or not JUNO — fall through to generic
+  }
 
+  // If login.htm doesn't exist, this isn't JUNO
+  if (!loginPage.ok) return null;
+  jar.update(loginPage);
+
+  // From here on, we're confident this is JUNO — return errors, don't fall through
+  try {
     // Step 2: POST login credentials
     const loginRes = await fetch(`${erpBase}/j_spring_security_check`, {
       method: 'POST',
@@ -128,7 +137,9 @@ async function tryJunoFlow(
     });
     jar.update(dashboard);
 
-    if (!dashboard.ok) return null; // fall through to generic
+    if (!dashboard.ok) {
+      return { success: false, error: 'Logged in but could not access the ERP dashboard' };
+    }
 
     // Step 4: Fetch academic info
     let studentName = 'Student';
@@ -171,11 +182,20 @@ async function tryJunoFlow(
       cache: 'no-store',
     });
 
-    if (!subjectsRes.ok) return null; // fall through to generic
+    if (!subjectsRes.ok) {
+      return { success: false, error: 'Logged in but the ERP did not return attendance data — try again in a moment' };
+    }
 
-    const subjectData: SubjectApiResponse[] = await subjectsRes.json();
+    let subjectData: SubjectApiResponse[];
+    try {
+      subjectData = await subjectsRes.json();
+    } catch {
+      return { success: false, error: 'ERP returned unexpected data — try again in a moment' };
+    }
 
-    if (!Array.isArray(subjectData) || subjectData.length === 0) return null;
+    if (!Array.isArray(subjectData) || subjectData.length === 0) {
+      return { success: false, error: 'No attendance data found — your ERP account may not have any attendance records yet' };
+    }
 
     // Filter to latest semester
     const termNames = [...new Set(subjectData.map(s => s.termName))];
@@ -211,9 +231,9 @@ async function tryJunoFlow(
         threshold,
       },
     };
-  } catch {
-    // JUNO flow failed entirely — fall through to generic
-    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, error: `ERP connection error: ${message}` };
   }
 }
 
