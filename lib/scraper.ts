@@ -122,14 +122,18 @@ async function tryJunoFlow(
 
   // From here on, we're confident this is JUNO — return errors, don't fall through
   try {
-    // Step 2: POST login credentials
+    // Step 2: POST login credentials (URLSearchParams handles special chars properly)
+    const loginBody = new URLSearchParams();
+    loginBody.set('j_username', username);
+    loginBody.set('j_password', password);
+
     const loginRes = await fetch(`${erpBase}/j_spring_security_check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Cookie': jar.toString(),
       },
-      body: `j_username=${encodeURIComponent(username)}&j_password=${encodeURIComponent(password)}`,
+      body: loginBody.toString(),
       redirect: 'manual',
       cache: 'no-store',
     });
