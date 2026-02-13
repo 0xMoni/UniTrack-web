@@ -23,6 +23,7 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState<StatusFilterType>('all');
   const [savedUsername, setSavedUsername] = useState('');
   const [savedErpUrl, setSavedErpUrl] = useState('');
+  const [sessionPassword, setSessionPassword] = useState('');
   const [threshold, setThreshold] = useState(75);
   const [subjectThresholds, setSubjectThresholds] = useState<Record<string, number>>({});
   const [showThresholdModal, setShowThresholdModal] = useState(false);
@@ -131,6 +132,7 @@ export default function Home() {
         localStorage.setItem(ERP_URL_KEY, erpUrl);
         setSavedUsername(username);
         setSavedErpUrl(erpUrl);
+        setSessionPassword(password);
       } else {
         setError(result.error || 'Failed to fetch attendance data');
       }
@@ -141,8 +143,18 @@ export default function Home() {
     }
   }, [threshold]);
 
+  const handleRefresh = () => {
+    if (savedErpUrl && savedUsername && sessionPassword) {
+      fetchAttendance(savedErpUrl, savedUsername, sessionPassword);
+    } else {
+      // No password in memory (page was reloaded) — need to log in again
+      handleLogout();
+    }
+  };
+
   const handleLogout = () => {
     setAttendanceData(null);
+    setSessionPassword('');
     localStorage.removeItem(STORAGE_KEY);
     setActiveFilter('all');
   };
@@ -285,11 +297,7 @@ export default function Home() {
         <StudentInfo
           student={attendanceData.student}
           lastUpdated={attendanceData.lastUpdated}
-          onRefresh={() => {
-            if (savedUsername) {
-              handleLogout();
-            }
-          }}
+          onRefresh={handleRefresh}
           isLoading={isLoading}
         />
 
