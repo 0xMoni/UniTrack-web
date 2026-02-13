@@ -199,10 +199,13 @@ async function tryJunoFlow(
     }
 
     let subjectData: SubjectApiResponse[];
+    const rawText = await subjectsRes.text();
     try {
-      subjectData = await subjectsRes.json();
+      subjectData = JSON.parse(rawText);
     } catch {
-      return { success: false, error: 'ERP returned unexpected data — try again in a moment' };
+      // Show a snippet of what the ERP actually returned
+      const preview = rawText.substring(0, 200).replace(/</g, '').replace(/>/g, '');
+      return { success: false, error: `ERP returned unexpected data: "${preview}"` };
     }
 
     if (!Array.isArray(subjectData) || subjectData.length === 0) {
