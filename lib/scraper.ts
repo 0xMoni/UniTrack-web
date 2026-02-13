@@ -120,26 +120,30 @@ async function tryJunoFlow(
   if (!loginPage.ok) return null;
   jar.update(loginPage);
 
-  // Extract CSRF token from login page if present
-  let csrfToken = '';
-  let csrfField = '';
+  // Extract all hidden fields from the login form (CSRF tokens, session IDs, etc.)
+  const hiddenFields: Record<string, string> = {};
   try {
     const loginHtml = await loginPage.text();
-    const csrfMatch = loginHtml.match(/<input[^>]*name=["'](_csrf|csrf_token|csrfToken)["'][^>]*value=["']([^"']+)["']/i)
-      || loginHtml.match(/<input[^>]*value=["']([^"']+)["'][^>]*name=["'](_csrf|csrf_token|csrfToken)["']/i);
-    if (csrfMatch) {
-      // First regex: name is group 1, value is group 2
-      // Second regex: value is group 1, name is group 2
-      csrfField = csrfMatch[1].startsWith('_') || csrfMatch[1].includes('csrf') ? csrfMatch[1] : csrfMatch[2];
-      csrfToken = csrfMatch[1].startsWith('_') || csrfMatch[1].includes('csrf') ? csrfMatch[2] : csrfMatch[1];
+    // Find the form containing the password field
+    const formMatch = loginHtml.match(/<form\b[^>]*>([\s\S]*?)<\/form>/gi);
+    if (formMatch) {
+      for (const form of formMatch) {
+        if (/<input[^>]*type=["']password["']/i.test(form)) {
+          const hiddenRegex = /<input[^>]*type=["']hidden["'][^>]*>/gi;
+          let hMatch: RegExpExecArray | null;
+          while ((hMatch = hiddenRegex.exec(form)) !== null) {
+            const inp = hMatch[0];
+            const nameM = inp.match(/name=["']([^"']+)["']/i);
+            const valueM = inp.match(/value=["']([^"']*?)["']/i);
+            if (nameM?.[1]) {
+              hiddenFields[nameM[1]] = valueM?.[1] || '';
+            }
+          }
+          break;
+        }
+      }
     }
-    // Also check for meta tag CSRF
-    const metaCsrf = loginHtml.match(/<meta[^>]*name=["']_csrf["'][^>]*content=["']([^"']+)["']/i);
-    if (!csrfToken && metaCsrf) {
-      csrfField = '_csrf';
-      csrfToken = metaCsrf[1];
-    }
-  } catch { /* continue without CSRF */ }
+  } catch { /* continue without hidden fields */ }
 
   // From here on, we're confident this is JUNO — return errors, don't fall through
   try {
@@ -147,8 +151,8 @@ async function tryJunoFlow(
     const loginBody = new URLSearchParams();
     loginBody.set('j_username', username);
     loginBody.set('j_password', password);
-    if (csrfField && csrfToken) {
-      loginBody.set(csrfField, csrfToken);
+    for (const [k, v] of Object.entries(hiddenFields)) {
+      loginBody.set(k, v);
     }
 
     const loginRes = await fetch(`${erpBase}/j_spring_security_check`, {
@@ -156,6 +160,7 @@ async function tryJunoFlow(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Cookie': jar.toString(),
+        'Referer': `${erpBase}/login.htm`,
       },
       body: loginBody.toString(),
       redirect: 'manual',
