@@ -120,12 +120,36 @@ async function tryJunoFlow(
   if (!loginPage.ok) return null;
   jar.update(loginPage);
 
+  // Extract CSRF token from login page if present
+  let csrfToken = '';
+  let csrfField = '';
+  try {
+    const loginHtml = await loginPage.text();
+    const csrfMatch = loginHtml.match(/<input[^>]*name=["'](_csrf|csrf_token|csrfToken)["'][^>]*value=["']([^"']+)["']/i)
+      || loginHtml.match(/<input[^>]*value=["']([^"']+)["'][^>]*name=["'](_csrf|csrf_token|csrfToken)["']/i);
+    if (csrfMatch) {
+      // First regex: name is group 1, value is group 2
+      // Second regex: value is group 1, name is group 2
+      csrfField = csrfMatch[1].startsWith('_') || csrfMatch[1].includes('csrf') ? csrfMatch[1] : csrfMatch[2];
+      csrfToken = csrfMatch[1].startsWith('_') || csrfMatch[1].includes('csrf') ? csrfMatch[2] : csrfMatch[1];
+    }
+    // Also check for meta tag CSRF
+    const metaCsrf = loginHtml.match(/<meta[^>]*name=["']_csrf["'][^>]*content=["']([^"']+)["']/i);
+    if (!csrfToken && metaCsrf) {
+      csrfField = '_csrf';
+      csrfToken = metaCsrf[1];
+    }
+  } catch { /* continue without CSRF */ }
+
   // From here on, we're confident this is JUNO — return errors, don't fall through
   try {
     // Step 2: POST login credentials (URLSearchParams handles special chars properly)
     const loginBody = new URLSearchParams();
     loginBody.set('j_username', username);
     loginBody.set('j_password', password);
+    if (csrfField && csrfToken) {
+      loginBody.set(csrfField, csrfToken);
+    }
 
     const loginRes = await fetch(`${erpBase}/j_spring_security_check`, {
       method: 'POST',
@@ -207,9 +231,11 @@ async function tryJunoFlow(
     try {
       subjectData = JSON.parse(rawText);
     } catch {
-      // Show a snippet of what the ERP actually returned
-      const preview = rawText.substring(0, 200).replace(/</g, '').replace(/>/g, '');
-      return { success: false, error: `ERP returned unexpected data: "${preview}"` };
+      // If the ERP returned HTML, the session isn't authenticated
+      if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
+        return { success: false, error: 'Login failed — check your username and password' };
+      }
+      return { success: false, error: 'ERP returned unexpected data — try again in a moment' };
     }
 
     if (!Array.isArray(subjectData) || subjectData.length === 0) {
