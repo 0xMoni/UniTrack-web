@@ -95,7 +95,7 @@ export async function scrapeAttendance(
 
   return {
     success: false,
-    error: `Could not fetch attendance data — JUNO: ${junoError} | Generic: ${genericError}`,
+    error: 'Could not fetch attendance data. Your ERP portal may use a login flow we don\'t support yet.',
   };
 }
 
