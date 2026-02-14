@@ -284,12 +284,14 @@ export default function Home() {
 
   // ── Handle password prompt submit (for refresh after reload) ──
   const handlePasswordPromptSubmit = async () => {
-    if (!user || !promptPassword) return;
+    if (!user || !promptPassword || isLoading) return;
     setPromptError('');
+    setIsLoading(true);
 
     const creds = await loadErpCredentials(user.uid, promptPassword);
     if (!creds) {
       setPromptError('Wrong password. Please try again.');
+      setIsLoading(false);
       return;
     }
 
@@ -676,15 +678,17 @@ export default function Home() {
                   setPromptPassword('');
                   setPromptError('');
                 }}
-                className="flex-1 py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                disabled={isLoading}
+                className="flex-1 py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePasswordPromptSubmit}
-                className="flex-1 py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all"
+                disabled={isLoading}
+                className="flex-1 py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Refresh
+                {isLoading ? 'Refreshing...' : 'Refresh'}
               </button>
             </div>
           </div>
