@@ -207,7 +207,7 @@ export default function Home() {
   };
 
   // ── Fetch attendance from ERP ──
-  const fetchAttendance = useCallback(async (erpUrl: string, username: string, password: string) => {
+  const fetchAttendance = useCallback(async (erpUrl: string, username: string, password: string, encryptionPassword?: string) => {
     if (!user) return;
     setIsLoading(true);
     setError(null);
@@ -233,9 +233,10 @@ export default function Home() {
         setSavedErpUrl(erpUrl);
 
         // Encrypt & save ERP credentials to Firestore
-        if (uniTrackPassword) {
+        const pwForEncrypt = encryptionPassword || uniTrackPassword;
+        if (pwForEncrypt) {
           try {
-            await saveErpCredentials(user.uid, erpUrl, username, password, uniTrackPassword);
+            await saveErpCredentials(user.uid, erpUrl, username, password, pwForEncrypt);
             setHasErpCreds(true);
           } catch (saveErr) {
             console.error('Failed to save ERP credentials:', saveErr);
@@ -278,7 +279,7 @@ export default function Home() {
       try {
         const creds = await loadErpCredentials(user.uid, uniTrackPassword);
         if (creds) {
-          fetchAttendance(creds.erpUrl, creds.username, creds.password);
+          fetchAttendance(creds.erpUrl, creds.username, creds.password, uniTrackPassword);
           return;
         }
       } catch {
@@ -303,17 +304,39 @@ export default function Home() {
     setPromptError('');
     setIsLoading(true);
 
-    const creds = await loadErpCredentials(user.uid, promptPassword);
-    if (!creds) {
-      setPromptError('Wrong password. Please try again.');
-      setIsLoading(false);
-      return;
-    }
+    try {
+      // First check if credentials exist in Firestore at all
+      const userData = await loadUserData(user.uid);
+      if (!userData.erpCredentials) {
+        setPromptError('No saved credentials found. Please reconnect your ERP.');
+        setIsLoading(false);
+        return;
+      }
 
-    setUniTrackPassword(promptPassword);
+      const creds = await loadErpCredentials(user.uid, promptPassword);
+      if (!creds) {
+        setPromptError('Wrong password. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
+      setUniTrackPassword(promptPassword);
+      setShowPasswordPrompt(false);
+      setPromptPassword('');
+      fetchAttendance(creds.erpUrl, creds.username, creds.password, promptPassword);
+    } catch {
+      setPromptError('Something went wrong. Try again or reconnect your ERP.');
+      setIsLoading(false);
+    }
+  };
+
+  // ── Reconnect ERP (clear data so ERP form shows) ──
+  const handleReconnectErp = () => {
+    setAttendanceData(null);
+    setHasErpCreds(false);
     setShowPasswordPrompt(false);
     setPromptPassword('');
-    fetchAttendance(creds.erpUrl, creds.username, creds.password);
+    setPromptError('');
   };
 
   // ── Logout ──
@@ -684,7 +707,17 @@ export default function Home() {
               }}
             />
             {promptError && (
-              <p className="text-sm text-red-500 mb-3">{promptError}</p>
+              <div className="mb-3">
+                <p className="text-sm text-red-500">{promptError}</p>
+                {promptError.includes('reconnect') && (
+                  <button
+                    onClick={handleReconnectErp}
+                    className="text-sm text-indigo-500 hover:text-indigo-600 font-medium mt-1"
+                  >
+                    Reconnect ERP →
+                  </button>
+                )}
+              </div>
             )}
             <div className="flex gap-2">
               <button
