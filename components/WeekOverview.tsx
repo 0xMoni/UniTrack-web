@@ -1,7 +1,7 @@
 'use client';
 
 import { Subject, Timetable } from '@/lib/types';
-import { calculateStatus, getEffectiveThreshold, getSubjectKey } from '@/lib/utils';
+import { calculateStatus, getEffectiveThreshold, getStatusColor, getSubjectKey } from '@/lib/utils';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -10,14 +10,6 @@ interface WeekOverviewProps {
   subjects: Subject[];
   globalThreshold: number;
   subjectThresholds: Record<string, number>;
-}
-
-function getDotColor(status: 'safe' | 'critical' | 'low'): string {
-  switch (status) {
-    case 'safe': return 'bg-emerald-500';
-    case 'critical': return 'bg-amber-500';
-    case 'low': return 'bg-red-500';
-  }
 }
 
 export default function WeekOverview({ timetable, subjects, globalThreshold, subjectThresholds }: WeekOverviewProps) {
@@ -58,7 +50,7 @@ export default function WeekOverview({ timetable, subjects, globalThreshold, sub
                     return (
                       <div
                         key={`${getSubjectKey(s)}-${j}`}
-                        className={`w-2.5 h-2.5 rounded-full ${getDotColor(status)}`}
+                        className={`w-2.5 h-2.5 rounded-full ${getStatusColor(status)}`}
                         title={`${s.name} — ${s.percentage.toFixed(1)}%`}
                       />
                     );

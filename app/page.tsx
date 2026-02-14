@@ -29,7 +29,6 @@ export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
   const { user, loading: authLoading, login, signUp, logout } = useAuth();
 
-
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +42,6 @@ export default function Home() {
   const [timetable, setTimetable] = useState<Timetable>({});
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [hasErpCreds, setHasErpCreds] = useState(false);
 
   // Premium state
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
@@ -71,7 +69,6 @@ export default function Home() {
     setSavedUsername('');
     setSavedErpUrl('');
     setActiveFilter('all');
-    setHasErpCreds(false);
     setThreshold(75);
     setSubjectThresholds({});
     setTimetable({});
@@ -100,7 +97,6 @@ export default function Home() {
         if (data.subjectThresholds) setSubjectThresholds(data.subjectThresholds);
         if (data.timetable) setTimetable(data.timetable);
         if (data.erpUrl) setSavedErpUrl(data.erpUrl);
-        setHasErpCreds(!!data.erpCredentials);
         if (data.premiumUntil) setPremiumUntil(data.premiumUntil);
         if (data.trialEndsAt) setTrialEndsAt(data.trialEndsAt);
         if (data.refreshCount) setRefreshCount(data.refreshCount);
@@ -241,7 +237,6 @@ export default function Home() {
         // Encrypt & save ERP credentials (encrypted with UID, no password needed)
         try {
           await saveErpCredentials(user.uid, erpUrl, username, password);
-          setHasErpCreds(true);
         } catch (saveErr) {
           console.error('Failed to save ERP credentials:', saveErr);
         }
@@ -298,7 +293,6 @@ export default function Home() {
     setSavedUsername('');
     setSavedErpUrl('');
     setActiveFilter('all');
-    setHasErpCreds(false);
     setThreshold(75);
     setSubjectThresholds({});
     setTimetable({});
@@ -374,43 +368,27 @@ export default function Home() {
     );
   }
 
-  // ── Logged in but no attendance data and no ERP creds → ERP connection form ──
-  if (!attendanceData && !hasErpCreds) {
-    return (
-      <>
-        <LoginForm
-          mode="erp"
-          onSubmit={fetchAttendance}
-          isLoading={isLoading}
-          savedUsername={savedUsername}
-          savedErpUrl={savedErpUrl}
-          dark={dark}
-          onToggleTheme={toggleTheme}
-          onLogout={handleLogout}
-        />
-        {error && (
-          <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="font-medium text-sm">Error</p>
-                <p className="text-sm opacity-90">{error}</p>
-              </div>
-              <button onClick={() => setError(null)} className="ml-auto">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  }
+  // ── Error toast (reused across views) ──
+  const errorToast = error && (
+    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
+      <div className="flex items-start gap-3">
+        <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <p className="font-medium text-sm">Error</p>
+          <p className="text-sm opacity-90">{error}</p>
+        </div>
+        <button onClick={() => setError(null)} className="ml-auto">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
 
-  // ── Logged in, has ERP creds but no attendance data yet → also show ERP form ──
+  // ── Logged in but no attendance data → ERP connection form ──
   if (!attendanceData) {
     return (
       <>
@@ -424,24 +402,7 @@ export default function Home() {
           onToggleTheme={toggleTheme}
           onLogout={handleLogout}
         />
-        {error && (
-          <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="font-medium text-sm">Error</p>
-                <p className="text-sm opacity-90">{error}</p>
-              </div>
-              <button onClick={() => setError(null)} className="ml-auto">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
+        {errorToast}
       </>
     );
   }
@@ -651,25 +612,7 @@ export default function Home() {
         onPaymentSuccess={handlePaymentSuccess}
       />
 
-      {/* Error Toast */}
-      {error && (
-        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <p className="font-medium text-sm">Error</p>
-              <p className="text-sm opacity-90">{error}</p>
-            </div>
-            <button onClick={() => setError(null)} className="ml-auto">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
+      {errorToast}
     </div>
   );
 }
