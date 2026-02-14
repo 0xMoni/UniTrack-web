@@ -11,38 +11,9 @@ import {
 import { getFirebaseAuth } from './firebase';
 import { saveUserData } from './firestore';
 
-const PW_KEY = '__ut_pw';
-
-function getSessionPassword(): string {
-  if (typeof window === 'undefined') return '';
-  return sessionStorage.getItem(PW_KEY) || '';
-}
-
-function setSessionPassword(pw: string) {
-  if (typeof window === 'undefined') return;
-  if (pw) {
-    sessionStorage.setItem(PW_KEY, pw);
-  } else {
-    sessionStorage.removeItem(PW_KEY);
-  }
-}
-
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uniTrackPassword, setUniTrackPasswordState] = useState('');
-
-  // Restore password from sessionStorage on mount
-  useEffect(() => {
-    const saved = getSessionPassword();
-    if (saved) setUniTrackPasswordState(saved);
-  }, []);
-
-  // Wrapper that syncs to sessionStorage
-  const setUniTrackPassword = useCallback((pw: string) => {
-    setUniTrackPasswordState(pw);
-    setSessionPassword(pw);
-  }, []);
 
   useEffect(() => {
     // Only subscribe on client when Firebase is configured
@@ -52,11 +23,23 @@ export function useAuth() {
     }
 
     try {
-      const unsubscribe = onAuthStateChanged(getFirebaseAuth(), (firebaseUser) => {
-        setUser(firebaseUser);
+      const auth = getFirebaseAuth();
+
+      // Wait for auth state to be fully restored from IndexedDB before
+      // subscribing. This prevents a flash of the login form on page reload.
+      let unsubscribe: (() => void) | undefined;
+
+      auth.authStateReady().then(() => {
+        setUser(auth.currentUser);
         setLoading(false);
+
+        // Now subscribe for future changes (login, logout, token refresh)
+        unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+          setUser(firebaseUser);
+        });
       });
-      return unsubscribe;
+
+      return () => unsubscribe?.();
     } catch {
       setLoading(false);
     }
@@ -64,23 +47,20 @@ export function useAuth() {
 
   const login = useCallback(async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
-    setUniTrackPassword(password);
     return cred.user;
-  }, [setUniTrackPassword]);
+  }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
     const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
-    setUniTrackPassword(password);
     // Set 7-day free trial for new sign-ups
     const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     await saveUserData(cred.user.uid, { trialEndsAt });
     return cred.user;
-  }, [setUniTrackPassword]);
+  }, []);
 
   const logout = useCallback(async () => {
     await signOut(getFirebaseAuth());
-    setUniTrackPassword('');
-  }, [setUniTrackPassword]);
+  }, []);
 
-  return { user, loading, uniTrackPassword, setUniTrackPassword, login, signUp, logout };
+  return { user, loading, login, signUp, logout };
 }

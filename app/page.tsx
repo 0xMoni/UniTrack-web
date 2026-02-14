@@ -29,6 +29,7 @@ export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
   const { user, loading: authLoading, login, signUp, logout } = useAuth();
 
+
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
