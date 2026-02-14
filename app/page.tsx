@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import LoginForm from '@/components/LoginForm';
 import StudentInfo from '@/components/StudentInfo';
 import StatusFilter from '@/components/StatusFilter';
@@ -28,6 +28,10 @@ import {
 export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
   const { user, loading: authLoading, uniTrackPassword, setUniTrackPassword, login, signUp, logout } = useAuth();
+
+  // Ref to always have the current uniTrackPassword (avoids stale closures in useCallback)
+  const uniTrackPasswordRef = useRef(uniTrackPassword);
+  uniTrackPasswordRef.current = uniTrackPassword;
 
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -243,7 +247,7 @@ export default function Home() {
         setSavedErpUrl(erpUrl);
 
         // Encrypt & save ERP credentials to Firestore
-        const pwForEncrypt = encryptionPassword || uniTrackPassword;
+        const pwForEncrypt = encryptionPassword || uniTrackPasswordRef.current;
         if (pwForEncrypt) {
           try {
             await saveErpCredentials(user.uid, erpUrl, username, password, pwForEncrypt);
@@ -272,7 +276,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [threshold, user, uniTrackPassword, attendanceData, premiumStatus.isPremium, refreshCount, refreshCountResetMonth]);
+  }, [threshold, user, attendanceData, premiumStatus.isPremium, refreshCount, refreshCountResetMonth]);
 
   // ── Handle refresh ──
   const handleRefresh = async () => {
