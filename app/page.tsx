@@ -12,108 +12,170 @@ import WeekOverview from '@/components/WeekOverview';
 import OverallStats from '@/components/OverallStats';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useTheme } from '@/lib/useTheme';
+import { useAuth } from '@/lib/useAuth';
+import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, UserData } from '@/lib/firestore';
 import { AttendanceData, StatusFilter as StatusFilterType, FetchResponse, Timetable } from '@/lib/types';
-import { STORAGE_KEY, CREDENTIALS_KEY, THRESHOLD_KEY, SUBJECT_THRESHOLDS_KEY, ERP_URL_KEY, TIMETABLE_KEY, calculateStatus, getSubjectKey, getEffectiveThreshold } from '@/lib/utils';
+import {
+  STORAGE_KEY, CREDENTIALS_KEY, THRESHOLD_KEY, SUBJECT_THRESHOLDS_KEY,
+  ERP_URL_KEY, TIMETABLE_KEY,
+  calculateStatus, getSubjectKey, getEffectiveThreshold,
+} from '@/lib/utils';
 
 export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
+  const { user, loading: authLoading, uniTrackPassword, setUniTrackPassword, login, signUp, logout } = useAuth();
+
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<StatusFilterType>('all');
   const [savedUsername, setSavedUsername] = useState('');
   const [savedErpUrl, setSavedErpUrl] = useState('');
-  const [sessionPassword, setSessionPassword] = useState('');
   const [threshold, setThreshold] = useState(75);
   const [subjectThresholds, setSubjectThresholds] = useState<Record<string, number>>({});
   const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [timetable, setTimetable] = useState<Timetable>({});
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasErpCreds, setHasErpCreds] = useState(false);
 
-  // Load data from localStorage on mount
+  // Password prompt modal state (for refresh after page reload)
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [promptPassword, setPromptPassword] = useState('');
+  const [promptError, setPromptError] = useState('');
+
+  // ── Load data from Firestore when user authenticates ──
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedData = localStorage.getItem(STORAGE_KEY);
-      if (savedData) {
-        try {
-          setAttendanceData(JSON.parse(savedData));
-        } catch {
-          localStorage.removeItem(STORAGE_KEY);
+    if (!user) {
+      setIsInitialized(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await loadUserData(user.uid);
+
+        if (cancelled) return;
+
+        if (data.attendance) setAttendanceData(data.attendance);
+        if (data.threshold) setThreshold(data.threshold);
+        if (data.subjectThresholds) setSubjectThresholds(data.subjectThresholds);
+        if (data.timetable) setTimetable(data.timetable);
+        if (data.erpUrl) setSavedErpUrl(data.erpUrl);
+        setHasErpCreds(!!data.erpCredentials);
+
+        // Migrate localStorage data on first sign-up (if Firestore is empty)
+        if (!data.attendance && typeof window !== 'undefined') {
+          const localData = localStorage.getItem(STORAGE_KEY);
+          if (localData) {
+            try {
+              const parsed: AttendanceData = JSON.parse(localData);
+              setAttendanceData(parsed);
+
+              const localThreshold = parseInt(localStorage.getItem(THRESHOLD_KEY) || '') || 75;
+              setThreshold(localThreshold);
+
+              const localSubThresholds = JSON.parse(localStorage.getItem(SUBJECT_THRESHOLDS_KEY) || '{}');
+              setSubjectThresholds(localSubThresholds);
+
+              const localTimetable = JSON.parse(localStorage.getItem(TIMETABLE_KEY) || '{}');
+              setTimetable(localTimetable);
+
+              const localErpUrl = localStorage.getItem(ERP_URL_KEY) || '';
+              setSavedErpUrl(localErpUrl);
+
+              const localCreds = JSON.parse(localStorage.getItem(CREDENTIALS_KEY) || '{}');
+              if (localCreds.username) setSavedUsername(localCreds.username);
+
+              // Persist migrated data to Firestore
+              await saveUserData(user.uid, {
+                attendance: parsed,
+                threshold: localThreshold,
+                subjectThresholds: localSubThresholds,
+                timetable: localTimetable,
+                erpUrl: localErpUrl,
+                lastSynced: new Date().toISOString(),
+              });
+
+              // Clear localStorage after successful migration
+              localStorage.removeItem(STORAGE_KEY);
+              localStorage.removeItem(CREDENTIALS_KEY);
+              localStorage.removeItem(THRESHOLD_KEY);
+              localStorage.removeItem(SUBJECT_THRESHOLDS_KEY);
+              localStorage.removeItem(ERP_URL_KEY);
+              localStorage.removeItem(TIMETABLE_KEY);
+            } catch {
+              // Ignore migration errors
+            }
+          }
         }
+      } catch {
+        // Firestore load failed — user will see empty state
       }
 
-      const savedCreds = localStorage.getItem(CREDENTIALS_KEY);
-      if (savedCreds) {
-        try {
-          const creds = JSON.parse(savedCreds);
-          setSavedUsername(creds.username || '');
-        } catch {
-          localStorage.removeItem(CREDENTIALS_KEY);
-        }
-      }
+      if (!cancelled) setIsInitialized(true);
+    })();
 
-      const storedErpUrl = localStorage.getItem(ERP_URL_KEY);
-      if (storedErpUrl) {
-        setSavedErpUrl(storedErpUrl);
-      }
+    return () => { cancelled = true; };
+  }, [user]);
 
-      const savedThreshold = localStorage.getItem(THRESHOLD_KEY);
-      if (savedThreshold) {
-        setThreshold(parseInt(savedThreshold) || 75);
-      }
-
-      const savedSubjectThresholds = localStorage.getItem(SUBJECT_THRESHOLDS_KEY);
-      if (savedSubjectThresholds) {
-        try {
-          setSubjectThresholds(JSON.parse(savedSubjectThresholds));
-        } catch {
-          localStorage.removeItem(SUBJECT_THRESHOLDS_KEY);
-        }
-      }
-
-      const savedTimetable = localStorage.getItem(TIMETABLE_KEY);
-      if (savedTimetable) {
-        try {
-          setTimetable(JSON.parse(savedTimetable));
-        } catch {
-          localStorage.removeItem(TIMETABLE_KEY);
-        }
-      }
-
-      setIsInitialized(true);
-    }
-  }, []);
-
-  // Save data to localStorage when it changes
+  // ── Save attendance to Firestore when it changes ──
   useEffect(() => {
-    if (isInitialized && attendanceData) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(attendanceData));
-    }
-  }, [attendanceData, isInitialized]);
+    if (!isInitialized || !user || !attendanceData) return;
+    saveUserData(user.uid, {
+      attendance: attendanceData,
+      lastSynced: new Date().toISOString(),
+    });
+  }, [attendanceData, isInitialized, user]);
 
-  // Save threshold to localStorage when it changes
+  // ── Save threshold to Firestore when it changes ──
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem(THRESHOLD_KEY, threshold.toString());
-    }
-  }, [threshold, isInitialized]);
+    if (!isInitialized || !user) return;
+    saveUserData(user.uid, { threshold });
+  }, [threshold, isInitialized, user]);
 
-  // Save subject thresholds to localStorage when they change
+  // ── Save subject thresholds to Firestore when they change ──
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem(SUBJECT_THRESHOLDS_KEY, JSON.stringify(subjectThresholds));
-    }
-  }, [subjectThresholds, isInitialized]);
+    if (!isInitialized || !user) return;
+    saveUserData(user.uid, { subjectThresholds });
+  }, [subjectThresholds, isInitialized, user]);
 
-  // Save timetable to localStorage when it changes
+  // ── Save timetable to Firestore when it changes ──
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem(TIMETABLE_KEY, JSON.stringify(timetable));
-    }
-  }, [timetable, isInitialized]);
+    if (!isInitialized || !user) return;
+    saveUserData(user.uid, { timetable });
+  }, [timetable, isInitialized, user]);
 
+  // ── Auth handlers ──
+  const handleAuth = async (email: string, password: string, isSignUp: boolean) => {
+    setAuthError(null);
+    setIsLoading(true);
+    try {
+      if (isSignUp) {
+        await signUp(email, password);
+      } else {
+        await login(email, password);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Authentication failed';
+      // Friendlier Firebase error messages
+      if (msg.includes('auth/email-already-in-use')) setAuthError('This email is already registered. Try signing in.');
+      else if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) setAuthError('Invalid email or password.');
+      else if (msg.includes('auth/weak-password')) setAuthError('Password must be at least 6 characters.');
+      else if (msg.includes('auth/invalid-email')) setAuthError('Please enter a valid email address.');
+      else if (msg.includes('auth/too-many-requests')) setAuthError('Too many attempts. Try again later.');
+      else setAuthError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Fetch attendance from ERP ──
   const fetchAttendance = useCallback(async (erpUrl: string, username: string, password: string) => {
+    if (!user) return;
     setIsLoading(true);
     setError(null);
 
@@ -128,11 +190,14 @@ export default function Home() {
 
       if (result.success && result.data) {
         setAttendanceData(result.data);
-        localStorage.setItem(CREDENTIALS_KEY, JSON.stringify({ username }));
-        localStorage.setItem(ERP_URL_KEY, erpUrl);
         setSavedUsername(username);
         setSavedErpUrl(erpUrl);
-        setSessionPassword(password);
+
+        // Encrypt & save ERP credentials to Firestore
+        if (uniTrackPassword) {
+          await saveErpCredentials(user.uid, erpUrl, username, password, uniTrackPassword);
+          setHasErpCreds(true);
+        }
       } else {
         setError(result.error || 'Failed to fetch attendance data');
       }
@@ -141,22 +206,60 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [threshold]);
+  }, [threshold, user, uniTrackPassword]);
 
-  const handleRefresh = () => {
-    if (savedErpUrl && savedUsername && sessionPassword) {
-      fetchAttendance(savedErpUrl, savedUsername, sessionPassword);
-    } else {
-      // No password in memory (page was reloaded) — need to log in again
-      handleLogout();
+  // ── Handle refresh ──
+  const handleRefresh = async () => {
+    if (!user) return;
+
+    // If we have the UniTrack password in memory, decrypt and fetch directly
+    if (uniTrackPassword) {
+      const creds = await loadErpCredentials(user.uid, uniTrackPassword);
+      if (creds) {
+        fetchAttendance(creds.erpUrl, creds.username, creds.password);
+        return;
+      }
     }
+
+    // Password not in memory (page was reloaded) — show password prompt
+    if (hasErpCreds) {
+      setShowPasswordPrompt(true);
+      return;
+    }
+
+    // No ERP creds at all — nothing to refresh
+    setError('No saved ERP credentials. Please connect your ERP first.');
   };
 
-  const handleLogout = () => {
+  // ── Handle password prompt submit (for refresh after reload) ──
+  const handlePasswordPromptSubmit = async () => {
+    if (!user || !promptPassword) return;
+    setPromptError('');
+
+    const creds = await loadErpCredentials(user.uid, promptPassword);
+    if (!creds) {
+      setPromptError('Wrong password. Please try again.');
+      return;
+    }
+
+    setUniTrackPassword(promptPassword);
+    setShowPasswordPrompt(false);
+    setPromptPassword('');
+    fetchAttendance(creds.erpUrl, creds.username, creds.password);
+  };
+
+  // ── Logout ──
+  const handleLogout = async () => {
     setAttendanceData(null);
-    setSessionPassword('');
-    localStorage.removeItem(STORAGE_KEY);
+    setSavedUsername('');
+    setSavedErpUrl('');
     setActiveFilter('all');
+    setHasErpCreds(false);
+    setThreshold(75);
+    setSubjectThresholds({});
+    setTimetable({});
+    setIsInitialized(false);
+    await logout();
   };
 
   const handleThresholdSave = (newThreshold: number) => {
@@ -181,8 +284,8 @@ export default function Home() {
     return calculateStatus(subject.percentage, t);
   };
 
-  // Show loading state until client is initialized
-  if (!mounted || !isInitialized) {
+  // ── Loading state ──
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
         <img src="/logo.png" alt="UniTrack" className="w-14 h-14 animate-pulse" />
@@ -190,17 +293,44 @@ export default function Home() {
     );
   }
 
-  // Show login form if no data
-  if (!attendanceData) {
+  // ── Not logged in → Auth form ──
+  if (!user) {
     return (
       <>
         <LoginForm
+          mode="auth"
+          onAuth={handleAuth}
+          isLoading={isLoading}
+          authError={authError || undefined}
+          dark={dark}
+          onToggleTheme={toggleTheme}
+        />
+      </>
+    );
+  }
+
+  // ── Logged in but Firestore data still loading ──
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <img src="/logo.png" alt="UniTrack" className="w-14 h-14 animate-pulse" />
+      </div>
+    );
+  }
+
+  // ── Logged in but no attendance data and no ERP creds → ERP connection form ──
+  if (!attendanceData && !hasErpCreds) {
+    return (
+      <>
+        <LoginForm
+          mode="erp"
           onSubmit={fetchAttendance}
           isLoading={isLoading}
           savedUsername={savedUsername}
           savedErpUrl={savedErpUrl}
           dark={dark}
           onToggleTheme={toggleTheme}
+          onLogout={handleLogout}
         />
         {error && (
           <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
@@ -223,6 +353,44 @@ export default function Home() {
       </>
     );
   }
+
+  // ── Logged in, has ERP creds but no attendance data yet → also show ERP form ──
+  if (!attendanceData) {
+    return (
+      <>
+        <LoginForm
+          mode="erp"
+          onSubmit={fetchAttendance}
+          isLoading={isLoading}
+          savedUsername={savedUsername}
+          savedErpUrl={savedErpUrl}
+          dark={dark}
+          onToggleTheme={toggleTheme}
+          onLogout={handleLogout}
+        />
+        {error && (
+          <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="font-medium text-sm">Error</p>
+                <p className="text-sm opacity-90">{error}</p>
+              </div>
+              <button onClick={() => setError(null)} className="ml-auto">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ── Dashboard ──
 
   // Compute status counts using per-subject thresholds
   const statusCounts = attendanceData.subjects.reduce(
@@ -409,6 +577,50 @@ export default function Home() {
         subjects={attendanceData.subjects}
         currentTimetable={timetable}
       />
+
+      {/* Password Prompt Modal (for refresh after page reload) */}
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 w-full max-w-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Enter your password</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Your UniTrack password is needed to decrypt your saved ERP credentials.
+            </p>
+            <input
+              type="password"
+              value={promptPassword}
+              onChange={(e) => setPromptPassword(e.target.value)}
+              placeholder="UniTrack password"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 outline-none transition-all text-sm mb-3"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handlePasswordPromptSubmit();
+              }}
+            />
+            {promptError && (
+              <p className="text-sm text-red-500 mb-3">{promptError}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPasswordPrompt(false);
+                  setPromptPassword('');
+                  setPromptError('');
+                }}
+                className="flex-1 py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordPromptSubmit}
+                className="flex-1 py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Toast */}
       {error && (
