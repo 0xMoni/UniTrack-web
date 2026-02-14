@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import LoginForm from '@/components/LoginForm';
 import StudentInfo from '@/components/StudentInfo';
 import StatusFilter from '@/components/StatusFilter';
@@ -27,11 +27,7 @@ import {
 
 export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
-  const { user, loading: authLoading, uniTrackPassword, setUniTrackPassword, login, signUp, logout } = useAuth();
-
-  // Ref to always have the current uniTrackPassword (avoids stale closures in useCallback)
-  const uniTrackPasswordRef = useRef(uniTrackPassword);
-  uniTrackPasswordRef.current = uniTrackPassword;
+  const { user, loading: authLoading, login, signUp, logout } = useAuth();
 
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,11 +62,6 @@ export default function Home() {
     }, 60_000);
     return () => clearTimeout(safety);
   }, [isLoading]);
-
-  // Password prompt modal state (for refresh after page reload)
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [promptPassword, setPromptPassword] = useState('');
-  const [promptError, setPromptError] = useState('');
 
   // ── Load data from Firestore when user authenticates ──
   useEffect(() => {
@@ -221,7 +212,7 @@ export default function Home() {
   };
 
   // ── Fetch attendance from ERP ──
-  const fetchAttendance = useCallback(async (erpUrl: string, username: string, password: string, encryptionPassword?: string) => {
+  const fetchAttendance = useCallback(async (erpUrl: string, username: string, password: string) => {
     if (!user) return;
     setIsLoading(true);
     setError(null);
@@ -246,15 +237,12 @@ export default function Home() {
         setSavedUsername(username);
         setSavedErpUrl(erpUrl);
 
-        // Encrypt & save ERP credentials to Firestore
-        const pwForEncrypt = encryptionPassword || uniTrackPasswordRef.current;
-        if (pwForEncrypt) {
-          try {
-            await saveErpCredentials(user.uid, erpUrl, username, password, pwForEncrypt);
-            setHasErpCreds(true);
-          } catch (saveErr) {
-            console.error('Failed to save ERP credentials:', saveErr);
-          }
+        // Encrypt & save ERP credentials (encrypted with UID, no password needed)
+        try {
+          await saveErpCredentials(user.uid, erpUrl, username, password);
+          setHasErpCreds(true);
+        } catch (saveErr) {
+          console.error('Failed to save ERP credentials:', saveErr);
         }
 
         // Increment refresh count for free users (skip on first-ever fetch)
@@ -288,69 +276,19 @@ export default function Home() {
       return;
     }
 
-    // If we have the UniTrack password in memory, decrypt and fetch directly
-    if (uniTrackPassword) {
-      try {
-        const creds = await loadErpCredentials(user.uid, uniTrackPassword);
-        if (creds) {
-          fetchAttendance(creds.erpUrl, creds.username, creds.password, uniTrackPassword);
-          return;
-        }
-      } catch {
-        // Decryption or Firestore error — fall through to password prompt
-      }
-    }
-
-    // Password not in memory or decryption failed — check Firestore directly
-    // (more robust than relying on hasErpCreds state which can get out of sync)
-    if (hasErpCreds || attendanceData) {
-      setShowPasswordPrompt(true);
-      return;
-    }
-
-    // No ERP creds at all — nothing to refresh
-    setError('No saved ERP credentials. Please connect your ERP first.');
-  };
-
-  // ── Handle password prompt submit (for refresh after reload) ──
-  const handlePasswordPromptSubmit = async () => {
-    if (!user || !promptPassword || isLoading) return;
-    setPromptError('');
-    setIsLoading(true);
-
+    // Decrypt saved ERP credentials using UID and fetch
     try {
-      // First check if credentials exist in Firestore at all
-      const userData = await loadUserData(user.uid);
-      if (!userData.erpCredentials) {
-        setPromptError('No saved credentials found. Please reconnect your ERP.');
-        setIsLoading(false);
+      const creds = await loadErpCredentials(user.uid);
+      if (creds) {
+        fetchAttendance(creds.erpUrl, creds.username, creds.password);
         return;
       }
-
-      const creds = await loadErpCredentials(user.uid, promptPassword);
-      if (!creds) {
-        setPromptError('Wrong password. Please try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      setUniTrackPassword(promptPassword);
-      setShowPasswordPrompt(false);
-      setPromptPassword('');
-      fetchAttendance(creds.erpUrl, creds.username, creds.password, promptPassword);
     } catch {
-      setPromptError('Something went wrong. Try again or reconnect your ERP.');
-      setIsLoading(false);
+      // Firestore/decryption error
     }
-  };
 
-  // ── Reconnect ERP (clear data so ERP form shows) ──
-  const handleReconnectErp = () => {
-    setAttendanceData(null);
-    setHasErpCreds(false);
-    setShowPasswordPrompt(false);
-    setPromptPassword('');
-    setPromptError('');
+    // No saved credentials — show ERP form
+    setError('No saved ERP credentials. Please connect your ERP first.');
   };
 
   // ── Logout ──
@@ -700,62 +638,6 @@ export default function Home() {
         subjects={attendanceData.subjects}
         currentTimetable={timetable}
       />
-
-      {/* Password Prompt Modal (for refresh after page reload) */}
-      {showPasswordPrompt && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 w-full max-w-sm border border-slate-200 dark:border-slate-700">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">Enter your password</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              Your UniTrack password is needed to decrypt your saved ERP credentials.
-            </p>
-            <input
-              type="password"
-              value={promptPassword}
-              onChange={(e) => setPromptPassword(e.target.value)}
-              placeholder="UniTrack password"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 outline-none transition-all text-sm mb-3"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handlePasswordPromptSubmit();
-              }}
-            />
-            {promptError && (
-              <div className="mb-3">
-                <p className="text-sm text-red-500">{promptError}</p>
-                {promptError.includes('reconnect') && (
-                  <button
-                    onClick={handleReconnectErp}
-                    className="text-sm text-indigo-500 hover:text-indigo-600 font-medium mt-1"
-                  >
-                    Reconnect ERP →
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setShowPasswordPrompt(false);
-                  setPromptPassword('');
-                  setPromptError('');
-                }}
-                disabled={isLoading}
-                className="flex-1 py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePasswordPromptSubmit}
-                disabled={isLoading}
-                className="flex-1 py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-sm font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Refreshing...' : 'Refresh'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Upgrade Modal */}
       <UpgradeModal

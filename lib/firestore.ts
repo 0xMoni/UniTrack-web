@@ -57,21 +57,19 @@ export async function saveErpCredentials(
   erpUrl: string,
   username: string,
   password: string,
-  uniTrackPassword: string
 ): Promise<void> {
   const plaintext = JSON.stringify({ username, password });
-  const encrypted = await encryptCredentials(plaintext, uniTrackPassword);
+  const encrypted = await encryptCredentials(plaintext, uid);
   await saveUserData(uid, { erpUrl, erpCredentials: encrypted });
 }
 
 export async function loadErpCredentials(
   uid: string,
-  uniTrackPassword: string
 ): Promise<{ username: string; password: string; erpUrl: string } | null> {
   const data = await loadUserData(uid);
   if (!data.erpCredentials || !data.erpUrl) return null;
   try {
-    const plaintext = await decryptCredentials(data.erpCredentials, uniTrackPassword);
+    const plaintext = await decryptCredentials(data.erpCredentials, uid);
     const { username, password } = JSON.parse(plaintext);
     return { username, password, erpUrl: data.erpUrl };
   } catch {
