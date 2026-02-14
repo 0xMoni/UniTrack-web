@@ -53,6 +53,16 @@ export default function Home() {
 
   const premiumStatus = usePremium({ premiumUntil, trialEndsAt, refreshCount, refreshCountResetMonth });
 
+  // Safety: auto-reset loading after 60s to prevent stuck spinners
+  useEffect(() => {
+    if (!isLoading) return;
+    const safety = setTimeout(() => {
+      setIsLoading(false);
+      setError('Request timed out. Please try again.');
+    }, 60_000);
+    return () => clearTimeout(safety);
+  }, [isLoading]);
+
   // Password prompt modal state (for refresh after page reload)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [promptPassword, setPromptPassword] = useState('');
@@ -214,7 +224,7 @@ export default function Home() {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90_000); // 90s safety timeout
+      const timeout = setTimeout(() => controller.abort(), 55_000); // 55s fetch timeout
 
       const response = await fetch('/api/fetch', {
         method: 'POST',

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FetchResponse } from '@/lib/types';
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest): Promise<NextResponse<FetchResponse>> {
   try {
     const body = await request.json();
@@ -24,7 +26,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<FetchResp
     }
 
     const { scrapeAttendance } = await import('@/lib/scraper');
-    const result = await scrapeAttendance(erpUrl, username, password, threshold);
+
+    // Race between scraper and a 50s timeout
+    const result = await Promise.race([
+      scrapeAttendance(erpUrl, username, password, threshold),
+      new Promise<FetchResponse>((_, reject) =>
+        setTimeout(() => reject(new Error('ERP server took too long to respond')), 50_000)
+      ),
+    ]);
+
     return NextResponse.json(result);
 
   } catch (error) {
