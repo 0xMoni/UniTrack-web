@@ -213,11 +213,16 @@ export default function Home() {
     setError(null);
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000); // 90s safety timeout
+
       const response = await fetch('/api/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ erpUrl, username, password, threshold }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       const result: FetchResponse = await response.json();
 
@@ -248,7 +253,11 @@ export default function Home() {
         setError(result.error || 'Failed to fetch attendance data');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error — check your connection');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Request timed out — the ERP server took too long to respond. Try again.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Network error — check your connection');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -266,10 +275,14 @@ export default function Home() {
 
     // If we have the UniTrack password in memory, decrypt and fetch directly
     if (uniTrackPassword) {
-      const creds = await loadErpCredentials(user.uid, uniTrackPassword);
-      if (creds) {
-        fetchAttendance(creds.erpUrl, creds.username, creds.password);
-        return;
+      try {
+        const creds = await loadErpCredentials(user.uid, uniTrackPassword);
+        if (creds) {
+          fetchAttendance(creds.erpUrl, creds.username, creds.password);
+          return;
+        }
+      } catch {
+        // Decryption or Firestore error — fall through to password prompt
       }
     }
 
