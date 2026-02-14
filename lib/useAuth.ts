@@ -9,6 +9,7 @@ import {
   User,
 } from 'firebase/auth';
 import { getFirebaseAuth } from './firebase';
+import { saveUserData } from './firestore';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -42,6 +43,9 @@ export function useAuth() {
   const signUp = useCallback(async (email: string, password: string) => {
     const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
     setUniTrackPassword(password);
+    // Set 7-day free trial for new sign-ups
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    await saveUserData(cred.user.uid, { trialEndsAt });
     return cred.user;
   }, []);
 

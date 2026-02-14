@@ -9,9 +9,11 @@ interface AttendanceCardProps {
   threshold: number;
   hasCustomThreshold: boolean;
   onThresholdChange: (value: number | null) => void;
+  isPremium?: boolean;
+  onUpgradeClick?: () => void;
 }
 
-export default function AttendanceCard({ subject, threshold, hasCustomThreshold, onThresholdChange }: AttendanceCardProps) {
+export default function AttendanceCard({ subject, threshold, hasCustomThreshold, onThresholdChange, isPremium = true, onUpgradeClick }: AttendanceCardProps) {
   const [editing, setEditing] = useState(false);
   const { name, code, attended, total, percentage } = subject;
 
@@ -102,7 +104,13 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
           {/* Threshold badge row */}
           <div className="flex items-center justify-between">
             <button
-              onClick={() => setEditing(!editing)}
+              onClick={() => {
+                if (!isPremium && !hasCustomThreshold) {
+                  onUpgradeClick?.();
+                } else {
+                  setEditing(!editing);
+                }
+              }}
               className={`inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md transition-colors ${
                 hasCustomThreshold
                   ? 'bg-indigo-500/10 text-indigo-500 font-semibold'
@@ -110,9 +118,15 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
               }`}
             >
               <span>min {threshold}%</span>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
+              {!isPremium && !hasCustomThreshold ? (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              )}
             </button>
             {hasCustomThreshold && (
               <button
@@ -126,7 +140,7 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
         </div>
 
         {/* Inline threshold editor */}
-        {editing && (
+        {editing && (isPremium || hasCustomThreshold) && (
           <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-3 border border-slate-200 dark:border-slate-600/50 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Subject threshold</span>

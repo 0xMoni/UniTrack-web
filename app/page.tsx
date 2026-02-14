@@ -11,9 +11,13 @@ import TodayCard from '@/components/TodayCard';
 import WeekOverview from '@/components/WeekOverview';
 import OverallStats from '@/components/OverallStats';
 import ThemeToggle from '@/components/ThemeToggle';
+import PremiumBadge from '@/components/PremiumBadge';
+import PremiumGate from '@/components/PremiumGate';
+import UpgradeModal from '@/components/UpgradeModal';
 import { useTheme } from '@/lib/useTheme';
 import { useAuth } from '@/lib/useAuth';
-import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, UserData } from '@/lib/firestore';
+import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, incrementRefreshCount, savePayment, PaymentRecord } from '@/lib/firestore';
+import { usePremium } from '@/lib/usePremium';
 import { AttendanceData, StatusFilter as StatusFilterType, FetchResponse, Timetable } from '@/lib/types';
 import {
   STORAGE_KEY, CREDENTIALS_KEY, THRESHOLD_KEY, SUBJECT_THRESHOLDS_KEY,
@@ -39,6 +43,15 @@ export default function Home() {
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [hasErpCreds, setHasErpCreds] = useState(false);
+
+  // Premium state
+  const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [refreshCountResetMonth, setRefreshCountResetMonth] = useState('');
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  const premiumStatus = usePremium({ premiumUntil, trialEndsAt, refreshCount, refreshCountResetMonth });
 
   // Password prompt modal state (for refresh after page reload)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
@@ -66,6 +79,10 @@ export default function Home() {
         if (data.timetable) setTimetable(data.timetable);
         if (data.erpUrl) setSavedErpUrl(data.erpUrl);
         setHasErpCreds(!!data.erpCredentials);
+        if (data.premiumUntil) setPremiumUntil(data.premiumUntil);
+        if (data.trialEndsAt) setTrialEndsAt(data.trialEndsAt);
+        if (data.refreshCount) setRefreshCount(data.refreshCount);
+        if (data.refreshCountResetMonth) setRefreshCountResetMonth(data.refreshCountResetMonth);
 
         // Migrate localStorage data on first sign-up (if Firestore is empty)
         if (!data.attendance && typeof window !== 'undefined') {
@@ -189,6 +206,7 @@ export default function Home() {
       const result: FetchResponse = await response.json();
 
       if (result.success && result.data) {
+        const isFirstFetch = !attendanceData;
         setAttendanceData(result.data);
         setSavedUsername(username);
         setSavedErpUrl(erpUrl);
@@ -198,6 +216,14 @@ export default function Home() {
           await saveErpCredentials(user.uid, erpUrl, username, password, uniTrackPassword);
           setHasErpCreds(true);
         }
+
+        // Increment refresh count for free users (skip on first-ever fetch)
+        if (!isFirstFetch && !premiumStatus.isPremium) {
+          const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+          const updated = await incrementRefreshCount(user.uid, currentMonth, refreshCount, refreshCountResetMonth);
+          setRefreshCount(updated.refreshCount);
+          setRefreshCountResetMonth(updated.refreshCountResetMonth);
+        }
       } else {
         setError(result.error || 'Failed to fetch attendance data');
       }
@@ -206,11 +232,17 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [threshold, user, uniTrackPassword]);
+  }, [threshold, user, uniTrackPassword, attendanceData, premiumStatus.isPremium, refreshCount, refreshCountResetMonth]);
 
   // ── Handle refresh ──
   const handleRefresh = async () => {
     if (!user) return;
+
+    // Check refresh limit for free users
+    if (!premiumStatus.canRefresh) {
+      setShowUpgradeModal(true);
+      return;
+    }
 
     // If we have the UniTrack password in memory, decrypt and fetch directly
     if (uniTrackPassword) {
@@ -258,12 +290,24 @@ export default function Home() {
     setThreshold(75);
     setSubjectThresholds({});
     setTimetable({});
+    setPremiumUntil(null);
+    setTrialEndsAt(null);
+    setRefreshCount(0);
+    setRefreshCountResetMonth('');
+    setShowUpgradeModal(false);
     setIsInitialized(false);
     await logout();
   };
 
   const handleThresholdSave = (newThreshold: number) => {
     setThreshold(newThreshold);
+  };
+
+  const handlePaymentSuccess = async (newPremiumUntil: string, payment: PaymentRecord) => {
+    setPremiumUntil(newPremiumUntil);
+    if (user) {
+      await savePayment(user.uid, newPremiumUntil, payment);
+    }
   };
 
   const handleSubjectThresholdChange = (subjectKey: string, value: number | null) => {
@@ -426,9 +470,10 @@ export default function Home() {
             <h1 className="text-lg font-bold text-slate-900 dark:text-white">UniTrack</h1>
           </div>
           <div className="flex items-center gap-1">
+            <PremiumBadge status={premiumStatus} onUpgradeClick={() => setShowUpgradeModal(true)} />
             <ThemeToggle dark={dark} onToggle={toggleTheme} />
             <button
-              onClick={() => setShowTimetableSetup(true)}
+              onClick={() => premiumStatus.isPremium ? setShowTimetableSetup(true) : setShowUpgradeModal(true)}
               className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
               title="Timetable"
             >
@@ -467,26 +512,29 @@ export default function Home() {
           lastUpdated={attendanceData.lastUpdated}
           onRefresh={handleRefresh}
           isLoading={isLoading}
+          premiumStatus={premiumStatus}
         />
 
         {/* Today's Classes */}
         {hasTimetable ? (
-          <>
+          <PremiumGate isPremium={premiumStatus.isPremium} onUpgradeClick={() => setShowUpgradeModal(true)}>
             <TodayCard
               subjects={todaySubjects}
               globalThreshold={threshold}
               subjectThresholds={subjectThresholds}
             />
-            <WeekOverview
-              timetable={timetable}
-              subjects={attendanceData.subjects}
-              globalThreshold={threshold}
-              subjectThresholds={subjectThresholds}
-            />
-          </>
+            <div className="mt-5">
+              <WeekOverview
+                timetable={timetable}
+                subjects={attendanceData.subjects}
+                globalThreshold={threshold}
+                subjectThresholds={subjectThresholds}
+              />
+            </div>
+          </PremiumGate>
         ) : (
           <button
-            onClick={() => setShowTimetableSetup(true)}
+            onClick={() => premiumStatus.isPremium ? setShowTimetableSetup(true) : setShowUpgradeModal(true)}
             className="w-full bg-white dark:bg-slate-800/50 rounded-2xl p-4 border border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500/30 transition-colors text-left flex items-center gap-3 group"
           >
             <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
@@ -547,6 +595,8 @@ export default function Home() {
                   threshold={effectiveThreshold}
                   hasCustomThreshold={key in subjectThresholds}
                   onThresholdChange={(value) => handleSubjectThresholdChange(key, value)}
+                  isPremium={premiumStatus.isPremium}
+                  onUpgradeClick={() => setShowUpgradeModal(true)}
                 />
               );
             })
@@ -621,6 +671,17 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        premiumStatus={premiumStatus}
+        uid={user.uid}
+        email={user.email || ''}
+        currentPremiumUntil={premiumUntil}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
 
       {/* Error Toast */}
       {error && (

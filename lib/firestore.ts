@@ -1,7 +1,16 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import { AttendanceData, Timetable } from './types';
 import { EncryptedData, encryptCredentials, decryptCredentials } from './crypto';
+
+export interface PaymentRecord {
+  orderId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  paidAt: string;
+  premiumUntil: string;
+}
 
 export interface UserData {
   attendance: AttendanceData | null;
@@ -11,6 +20,11 @@ export interface UserData {
   erpUrl: string;
   erpCredentials: EncryptedData | null;
   lastSynced: string;
+  premiumUntil: string | null;
+  trialEndsAt: string | null;
+  refreshCount: number;
+  refreshCountResetMonth: string;
+  payments: PaymentRecord[];
 }
 
 const DEFAULT_USER_DATA: UserData = {
@@ -21,6 +35,11 @@ const DEFAULT_USER_DATA: UserData = {
   erpUrl: '',
   erpCredentials: null,
   lastSynced: '',
+  premiumUntil: null,
+  trialEndsAt: null,
+  refreshCount: 0,
+  refreshCountResetMonth: '',
+  payments: [],
 };
 
 export async function loadUserData(uid: string): Promise<UserData> {
@@ -58,4 +77,20 @@ export async function loadErpCredentials(
   } catch {
     return null;
   }
+}
+
+export async function savePayment(uid: string, premiumUntil: string, payment: PaymentRecord): Promise<void> {
+  await setDoc(doc(getFirebaseDb(), 'users', uid), {
+    premiumUntil,
+    payments: arrayUnion(payment),
+  }, { merge: true });
+}
+
+export async function incrementRefreshCount(uid: string, currentMonth: string, currentCount: number, currentResetMonth: string): Promise<{ refreshCount: number; refreshCountResetMonth: string }> {
+  // Lazy monthly reset: if the stored month differs from current, reset to 0
+  const isNewMonth = currentResetMonth !== currentMonth;
+  const newCount = isNewMonth ? 1 : currentCount + 1;
+  const update = { refreshCount: newCount, refreshCountResetMonth: currentMonth };
+  await saveUserData(uid, update);
+  return update;
 }
