@@ -75,6 +75,9 @@ export default function Home() {
     setRefreshCountResetMonth('');
     setShowUpgradeModal(false);
     setIsInitialized(false);
+    setIsLoading(false);
+    setError(null);
+    setAuthError(null);
 
     if (!user) return;
 
