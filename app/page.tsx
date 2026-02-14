@@ -61,6 +61,20 @@ export default function Home() {
   // ── Load data from Firestore when user authenticates ──
   useEffect(() => {
     if (!user) {
+      // Clear all state when user signs out or auth changes
+      setAttendanceData(null);
+      setSavedUsername('');
+      setSavedErpUrl('');
+      setActiveFilter('all');
+      setHasErpCreds(false);
+      setThreshold(75);
+      setSubjectThresholds({});
+      setTimetable({});
+      setPremiumUntil(null);
+      setTrialEndsAt(null);
+      setRefreshCount(0);
+      setRefreshCountResetMonth('');
+      setShowUpgradeModal(false);
       setIsInitialized(false);
       return;
     }
