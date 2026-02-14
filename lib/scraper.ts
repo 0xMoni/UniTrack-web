@@ -62,6 +62,13 @@ class CookieJar {
   }
 }
 
+// Fetch with a per-request timeout (default 15s)
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 // ─── Main entry point ────────────────────────────────────────────────
 
 export async function scrapeAttendance(
@@ -111,7 +118,7 @@ async function tryJunoFlow(
   // Step 1: Check if this is a JUNO ERP by trying the login page
   let loginPage: Response;
   try {
-    loginPage = await fetch(`${erpBase}/login.htm`, { cache: 'no-store' });
+    loginPage = await fetchWithTimeout(`${erpBase}/login.htm`, { cache: 'no-store' });
   } catch {
     return null; // not reachable or not JUNO — fall through to generic
   }
@@ -155,7 +162,7 @@ async function tryJunoFlow(
       loginBody.set(k, v);
     }
 
-    const loginRes = await fetch(`${erpBase}/j_spring_security_check`, {
+    const loginRes = await fetchWithTimeout(`${erpBase}/j_spring_security_check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -165,7 +172,7 @@ async function tryJunoFlow(
       body: loginBody.toString(),
       redirect: 'manual',
       cache: 'no-store',
-    });
+    }, 20_000);
     jar.update(loginRes);
 
     const location = loginRes.headers.get('location') || '';
@@ -176,7 +183,7 @@ async function tryJunoFlow(
 
     // Step 3: Follow redirect to dashboard
     const dashboardUrl = location.startsWith('/') ? `${erpBase}${location}` : `${erpBase}/home.htm`;
-    const dashboard = await fetch(dashboardUrl, {
+    const dashboard = await fetchWithTimeout(dashboardUrl, {
       headers: { 'Cookie': jar.toString() },
       cache: 'no-store',
     });
@@ -191,7 +198,7 @@ async function tryJunoFlow(
     let rollNo = '';
 
     try {
-      const academicRes = await fetch(`${erpBase}/stu_getAcademicInformationNew.json`, {
+      const academicRes = await fetchWithTimeout(`${erpBase}/stu_getAcademicInformationNew.json`, {
         headers: { 'Cookie': jar.toString() },
         cache: 'no-store',
       });
@@ -214,7 +221,7 @@ async function tryJunoFlow(
 
     // Step 5: Visit attendance page to set up session state
     try {
-      const attendancePage = await fetch(`${erpBase}/studentCourseFileNew.htm?shwA=%2700A%27`, {
+      const attendancePage = await fetchWithTimeout(`${erpBase}/studentCourseFileNew.htm?shwA=%2700A%27`, {
         headers: { 'Cookie': jar.toString() },
         cache: 'no-store',
       });
@@ -222,7 +229,7 @@ async function tryJunoFlow(
     } catch { /* continue anyway */ }
 
     // Step 6: Fetch subject-wise attendance
-    const subjectsRes = await fetch(`${erpBase}/stu_getSubjectOnChangeWithSemId1.json`, {
+    const subjectsRes = await fetchWithTimeout(`${erpBase}/stu_getSubjectOnChangeWithSemId1.json`, {
       headers: { 'Cookie': jar.toString() },
       cache: 'no-store',
     });
@@ -282,6 +289,9 @@ async function tryJunoFlow(
       },
     };
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { success: false, error: 'Your ERP server is not responding — it may be down or slow. Try again later.' };
+    }
     const message = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, error: `ERP connection error: ${message}` };
   }
@@ -301,7 +311,7 @@ async function tryGenericFlow(
 
   try {
     // Step 1: Fetch ERP base URL and detect login form
-    const homeRes = await fetch(erpBase, {
+    const homeRes = await fetchWithTimeout(erpBase, {
       cache: 'no-store',
       redirect: 'follow',
     });
@@ -320,7 +330,7 @@ async function tryGenericFlow(
     }
 
     // Step 3: Get dashboard HTML after login
-    const dashRes = await fetch(erpBase, {
+    const dashRes = await fetchWithTimeout(erpBase, {
       headers: { 'Cookie': jar.toString() },
       cache: 'no-store',
       redirect: 'follow',
@@ -440,7 +450,7 @@ async function submitLogin(
     body.set(k, v);
   }
 
-  const res = await fetch(form.action, {
+  const res = await fetchWithTimeout(form.action, {
     method: form.method,
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -449,7 +459,7 @@ async function submitLogin(
     body: body.toString(),
     redirect: 'manual',
     cache: 'no-store',
-  });
+  }, 20_000);
   jar.update(res);
 
   // Follow redirects manually to collect cookies
@@ -463,7 +473,7 @@ async function submitLogin(
       return false;
     }
 
-    const followRes = await fetch(redirectUrl, {
+    const followRes = await fetchWithTimeout(redirectUrl, {
       headers: { 'Cookie': jar.toString() },
       cache: 'no-store',
       redirect: 'follow',
@@ -474,7 +484,7 @@ async function submitLogin(
   // If no redirect and response is 2xx, check if the page still looks like a login page
   if (!location && res.status >= 200 && res.status < 400) {
     // Re-fetch the base to see if we're logged in
-    const checkRes = await fetch(erpBase, {
+    const checkRes = await fetchWithTimeout(erpBase, {
       headers: { 'Cookie': jar.toString() },
       cache: 'no-store',
       redirect: 'follow',
@@ -528,11 +538,11 @@ async function findAttendancePage(
     seenUrls.add(fullUrl);
 
     try {
-      const res = await fetch(fullUrl, {
+      const res = await fetchWithTimeout(fullUrl, {
         headers: { 'Cookie': jar.toString() },
         cache: 'no-store',
         redirect: 'follow',
-      });
+      }, 10_000);
       jar.update(res);
       if (!res.ok) continue;
 
@@ -549,11 +559,11 @@ async function findAttendancePage(
     seenUrls.add(url);
 
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         headers: { 'Cookie': jar.toString() },
         cache: 'no-store',
         redirect: 'follow',
-      });
+      }, 10_000);
       jar.update(res);
       if (!res.ok) continue;
 

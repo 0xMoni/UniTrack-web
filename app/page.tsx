@@ -54,13 +54,13 @@ export default function Home() {
 
   const premiumStatus = usePremium({ premiumUntil, trialEndsAt, refreshCount, refreshCountResetMonth });
 
-  // Safety: auto-reset loading after 60s to prevent stuck spinners
+  // Safety: auto-reset loading after 40s to prevent stuck spinners
   useEffect(() => {
     if (!isLoading) return;
     const safety = setTimeout(() => {
       setIsLoading(false);
       setError('Request timed out. Please try again.');
-    }, 60_000);
+    }, 40_000);
     return () => clearTimeout(safety);
   }, [isLoading]);
 
@@ -220,7 +220,7 @@ export default function Home() {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 55_000); // 55s fetch timeout
+      const timeout = setTimeout(() => controller.abort(), 35_000); // 35s fetch timeout
 
       const response = await fetch('/api/fetch', {
         method: 'POST',
