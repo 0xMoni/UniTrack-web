@@ -34,9 +34,10 @@ export async function POST(request: Request) {
       currency: order.currency,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
     });
-  } catch (err) {
-    console.error('Create order error:', err);
-    const message = err instanceof Error ? err.message : 'Failed to create order';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (err: unknown) {
+    console.error('Create order error:', JSON.stringify(err, null, 2));
+    const razorpayErr = err as { error?: { description?: string }; message?: string; statusCode?: number };
+    const message = razorpayErr?.error?.description || razorpayErr?.message || 'Failed to create order';
+    return NextResponse.json({ error: message, details: String(err) }, { status: 500 });
   }
 }
