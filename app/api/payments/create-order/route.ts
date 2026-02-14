@@ -1,11 +1,6 @@
 import { NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
-
 export async function POST(request: Request) {
   try {
     const { uid, email } = await request.json();
@@ -13,6 +8,19 @@ export async function POST(request: Request) {
     if (!uid || !email) {
       return NextResponse.json({ error: 'Missing uid or email' }, { status: 400 });
     }
+
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!keyId || !keySecret) {
+      console.error('Missing Razorpay env vars');
+      return NextResponse.json({ error: 'Payment service not configured' }, { status: 500 });
+    }
+
+    const razorpay = new Razorpay({
+      key_id: keyId,
+      key_secret: keySecret,
+    });
 
     const order = await razorpay.orders.create({
       amount: 2900, // Rs 29 in paise
@@ -28,6 +36,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     console.error('Create order error:', err);
-    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Failed to create order';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
