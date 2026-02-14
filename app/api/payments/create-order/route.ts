@@ -38,6 +38,6 @@ export async function POST(request: Request) {
     console.error('Create order error:', JSON.stringify(err, null, 2));
     const razorpayErr = err as { error?: { description?: string }; message?: string; statusCode?: number };
     const message = razorpayErr?.error?.description || razorpayErr?.message || 'Failed to create order';
-    return NextResponse.json({ error: message, details: String(err) }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
