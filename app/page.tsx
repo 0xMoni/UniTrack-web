@@ -213,8 +213,12 @@ export default function Home() {
 
         // Encrypt & save ERP credentials to Firestore
         if (uniTrackPassword) {
-          await saveErpCredentials(user.uid, erpUrl, username, password, uniTrackPassword);
-          setHasErpCreds(true);
+          try {
+            await saveErpCredentials(user.uid, erpUrl, username, password, uniTrackPassword);
+            setHasErpCreds(true);
+          } catch (saveErr) {
+            console.error('Failed to save ERP credentials:', saveErr);
+          }
         }
 
         // Increment refresh count for free users (skip on first-ever fetch)
@@ -253,8 +257,9 @@ export default function Home() {
       }
     }
 
-    // Password not in memory (page was reloaded) — show password prompt
-    if (hasErpCreds) {
+    // Password not in memory or decryption failed — check Firestore directly
+    // (more robust than relying on hasErpCreds state which can get out of sync)
+    if (hasErpCreds || attendanceData) {
       setShowPasswordPrompt(true);
       return;
     }
