@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence, Auth } from 'firebase/auth';
+import { initializeAuth, getAuth, browserLocalPersistence, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -27,19 +27,22 @@ function getApp(): FirebaseApp {
 
 export function getFirebaseAuth(): Auth {
   if (!_auth) {
+    const app = getApp();
     if (typeof window !== 'undefined') {
-      // Use initializeAuth with explicit persistence so the session
-      // survives page refreshes (IndexedDB preferred, localStorage fallback).
+      // Use browserLocalPersistence (localStorage-based) which is synchronous
+      // and reliable. IndexedDB persistence has a known issue where
+      // onAuthStateChanged fires with null before the DB finishes loading,
+      // causing the user to appear logged-out on refresh.
       try {
-        _auth = initializeAuth(getApp(), {
-          persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+        _auth = initializeAuth(app, {
+          persistence: browserLocalPersistence,
         });
       } catch {
-        // Already initialized by another import — reuse the existing instance
-        _auth = getAuth(getApp());
+        // Auth already initialized (e.g. HMR) — reuse existing instance
+        _auth = getAuth(app);
       }
     } else {
-      _auth = getAuth(getApp());
+      _auth = getAuth(app);
     }
   }
   return _auth;

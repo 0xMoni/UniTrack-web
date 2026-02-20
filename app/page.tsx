@@ -277,15 +277,15 @@ export default function Home() {
     try {
       const creds = await loadErpCredentials(user.uid);
       if (creds) {
-        fetchAttendance(creds.erpUrl, creds.username, creds.password);
+        await fetchAttendance(creds.erpUrl, creds.username, creds.password);
         return;
       }
     } catch {
-      // Firestore/decryption error
+      // Firestore/decryption error — fall through to show message
     }
 
-    // No saved credentials — show ERP form
-    setError('No saved ERP credentials. Please connect your ERP first.');
+    // No saved credentials — show error
+    setError('Could not load saved ERP credentials. Please log out and reconnect your ERP.');
   };
 
   // ── Logout ──
