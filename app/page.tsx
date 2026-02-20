@@ -332,7 +332,7 @@ export default function Home() {
   // Compute statuses based on per-subject thresholds
   const getSubjectStatus = (subject: AttendanceData['subjects'][number]) => {
     const t = getEffectiveThreshold(subject, threshold, subjectThresholds);
-    return calculateStatus(subject.percentage, t);
+    return calculateStatus(subject.percentage, t, subject.total);
   };
 
   // ── Loading state ──
@@ -417,7 +417,7 @@ export default function Home() {
       acc[status]++;
       return acc;
     },
-    { safe: 0, critical: 0, low: 0 }
+    { safe: 0, critical: 0, low: 0, no_data: 0 }
   );
 
   const filteredSubjects = activeFilter === 'all'
@@ -600,6 +600,8 @@ export default function Home() {
         onSave={setTimetable}
         subjects={attendanceData.subjects}
         currentTimetable={timetable}
+        isPremium={premiumStatus.isPremium}
+        onUpgradeClick={() => { setShowTimetableSetup(false); setShowUpgradeModal(true); }}
       />
 
       {/* Upgrade Modal */}

@@ -4,8 +4,10 @@ const BUFFER = 5; // Buffer percentage above threshold
 
 export function calculateStatus(
   percentage: number,
-  threshold: number
-): 'safe' | 'critical' | 'low' {
+  threshold: number,
+  total: number = -1
+): 'safe' | 'critical' | 'low' | 'no_data' {
+  if (total === 0) return 'no_data';
   if (percentage >= threshold + BUFFER) {
     return 'safe';
   } else if (percentage >= threshold) {
@@ -14,7 +16,7 @@ export function calculateStatus(
   return 'low';
 }
 
-export function getStatusColor(status: 'safe' | 'critical' | 'low'): string {
+export function getStatusColor(status: 'safe' | 'critical' | 'low' | 'no_data'): string {
   switch (status) {
     case 'safe':
       return 'bg-emerald-500';
@@ -22,10 +24,12 @@ export function getStatusColor(status: 'safe' | 'critical' | 'low'): string {
       return 'bg-amber-500';
     case 'low':
       return 'bg-red-500';
+    case 'no_data':
+      return 'bg-slate-400';
   }
 }
 
-export function getStatusBgColor(status: 'safe' | 'critical' | 'low'): string {
+export function getStatusBgColor(status: 'safe' | 'critical' | 'low' | 'no_data'): string {
   switch (status) {
     case 'safe':
       return 'bg-emerald-500/10 border-emerald-500/20';
@@ -33,10 +37,12 @@ export function getStatusBgColor(status: 'safe' | 'critical' | 'low'): string {
       return 'bg-amber-500/10 border-amber-500/20';
     case 'low':
       return 'bg-red-500/10 border-red-500/20';
+    case 'no_data':
+      return 'bg-slate-500/10 border-slate-500/20';
   }
 }
 
-export function getStatusTextColor(status: 'safe' | 'critical' | 'low'): string {
+export function getStatusTextColor(status: 'safe' | 'critical' | 'low' | 'no_data'): string {
   switch (status) {
     case 'safe':
       return 'text-emerald-500';
@@ -44,6 +50,8 @@ export function getStatusTextColor(status: 'safe' | 'critical' | 'low'): string 
       return 'text-amber-500';
     case 'low':
       return 'text-red-500';
+    case 'no_data':
+      return 'text-slate-400';
   }
 }
 

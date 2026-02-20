@@ -12,25 +12,28 @@ interface OverallStatsProps {
 }
 
 export default function OverallStats({ subjects, globalThreshold, subjectThresholds, activeFilter, onFilterChange }: OverallStatsProps) {
-  const totalAttended = subjects.reduce((sum, s) => sum + s.attended, 0);
-  const totalClasses = subjects.reduce((sum, s) => sum + s.total, 0);
+  // Exclude subjects with no classes conducted from aggregate calculations
+  const activeSubjects = subjects.filter(s => s.total > 0);
+
+  const totalAttended = activeSubjects.reduce((sum, s) => sum + s.attended, 0);
+  const totalClasses = activeSubjects.reduce((sum, s) => sum + s.total, 0);
   const overallPercentage = totalClasses > 0
     ? Math.round((totalAttended / totalClasses) * 1000) / 10
     : 0;
 
   // Overall projections
-  const totalSubjects = subjects.length;
+  const totalActiveSubjects = activeSubjects.length;
   const afterAttendAll = totalClasses > 0
-    ? Math.round(((totalAttended + totalSubjects) / (totalClasses + totalSubjects)) * 1000) / 10
+    ? Math.round(((totalAttended + totalActiveSubjects) / (totalClasses + totalActiveSubjects)) * 1000) / 10
     : 0;
   const afterSkipAll = totalClasses > 0
-    ? Math.round((totalAttended / (totalClasses + totalSubjects)) * 1000) / 10
+    ? Math.round((totalAttended / (totalClasses + totalActiveSubjects)) * 1000) / 10
     : 0;
 
   // Recalculate statuses using per-subject thresholds
   const statuses = subjects.map(s => {
     const t = getEffectiveThreshold(s, globalThreshold, subjectThresholds);
-    return calculateStatus(s.percentage, t);
+    return calculateStatus(s.percentage, t, s.total);
   });
 
   const safeCount = statuses.filter(s => s === 'safe').length;
@@ -51,9 +54,9 @@ export default function OverallStats({ subjects, globalThreshold, subjectThresho
       return sum + calculateClassesToAttend(s.attended, s.total, t);
     }, 0);
 
-  // Use a weighted average threshold for overall comparison
-  const avgThreshold = subjects.length > 0
-    ? subjects.reduce((sum, s) => sum + getEffectiveThreshold(s, globalThreshold, subjectThresholds), 0) / subjects.length
+  // Use a weighted average threshold for overall comparison (active subjects only)
+  const avgThreshold = activeSubjects.length > 0
+    ? activeSubjects.reduce((sum, s) => sum + getEffectiveThreshold(s, globalThreshold, subjectThresholds), 0) / activeSubjects.length
     : globalThreshold;
 
   const isOverallSafe = overallPercentage >= avgThreshold + 5;
@@ -71,7 +74,7 @@ export default function OverallStats({ subjects, globalThreshold, subjectThresho
     {
       label: 'Safe',
       value: safeCount,
-      sub: `of ${subjects.length}`,
+      sub: `of ${activeSubjects.length}`,
       color: 'text-emerald-500',
       ring: 'ring-emerald-500/20',
       filter: 'safe',
@@ -123,7 +126,7 @@ export default function OverallStats({ subjects, globalThreshold, subjectThresho
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Overall projection</span>
           <span className="text-xs text-slate-400 dark:text-slate-500">
-            Next full day ({totalSubjects} classes)
+            Next full day ({totalActiveSubjects} classes)
           </span>
         </div>
         <div className="flex items-center gap-4 text-sm">

@@ -46,7 +46,7 @@ export default function WeekOverview({ timetable, subjects, globalThreshold, sub
                 {daySubjects.length > 0 ? (
                   daySubjects.map((s, j) => {
                     const t = getEffectiveThreshold(s, globalThreshold, subjectThresholds);
-                    const status = calculateStatus(s.percentage, t);
+                    const status = calculateStatus(s.percentage, t, s.total);
                     return (
                       <div
                         key={`${getSubjectKey(s)}-${j}`}

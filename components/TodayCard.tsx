@@ -11,8 +11,9 @@ interface TodayCardProps {
   subjectThresholds: Record<string, number>;
 }
 
-function getVerdict(subject: Subject, threshold: number): 'skip' | 'risky' | 'attend' {
-  const status = calculateStatus(subject.percentage, threshold);
+function getVerdict(subject: Subject, threshold: number): 'skip' | 'risky' | 'attend' | 'no_data' {
+  const status = calculateStatus(subject.percentage, threshold, subject.total);
+  if (status === 'no_data') return 'no_data';
   if (status === 'safe' && calculateClassesToBunk(subject.attended, subject.total, threshold) > 0) {
     return 'skip';
   }
@@ -24,6 +25,7 @@ const verdictConfig = {
   skip: { label: 'Can skip', bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-500/20' },
   risky: { label: 'Risky', bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-500/20' },
   attend: { label: 'Must attend', bg: 'bg-red-500/10', text: 'text-red-600 dark:text-red-400', border: 'border-red-500/20' },
+  no_data: { label: 'No data', bg: 'bg-slate-500/10', text: 'text-slate-500 dark:text-slate-400', border: 'border-slate-500/20' },
 };
 
 export default function TodayCard({ subjects, globalThreshold, subjectThresholds }: TodayCardProps) {
@@ -76,10 +78,10 @@ export default function TodayCard({ subjects, globalThreshold, subjectThresholds
         {subjects.map((subject, i) => {
           const key = getSubjectKey(subject);
           const t = getEffectiveThreshold(subject, globalThreshold, subjectThresholds);
-          const status = calculateStatus(subject.percentage, t);
+          const status = calculateStatus(subject.percentage, t, subject.total);
           const verdict = verdicts[i];
           const cfg = verdictConfig[verdict];
-          const pctColor = status === 'safe' ? 'text-emerald-500' : status === 'critical' ? 'text-amber-500' : 'text-red-500';
+          const pctColor = status === 'no_data' ? 'text-slate-400' : status === 'safe' ? 'text-emerald-500' : status === 'critical' ? 'text-amber-500' : 'text-red-500';
 
           return (
             <div

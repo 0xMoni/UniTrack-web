@@ -6,7 +6,7 @@ import { getStatusColor } from '@/lib/utils';
 interface StatusFilterProps {
   activeFilter: StatusFilterType;
   onFilterChange: (filter: StatusFilterType) => void;
-  counts: { safe: number; critical: number; low: number };
+  counts: { safe: number; critical: number; low: number; no_data: number };
 }
 
 const filters: { key: StatusFilterType; label: string }[] = [
@@ -14,17 +14,18 @@ const filters: { key: StatusFilterType; label: string }[] = [
   { key: 'safe', label: 'Safe' },
   { key: 'critical', label: 'Critical' },
   { key: 'low', label: 'Low' },
+  { key: 'no_data', label: 'No Data' },
 ];
 
 export default function StatusFilter({ activeFilter, onFilterChange, counts }: StatusFilterProps) {
   const getCount = (key: StatusFilterType): number => {
-    if (key === 'all') return counts.safe + counts.critical + counts.low;
+    if (key === 'all') return counts.safe + counts.critical + counts.low + counts.no_data;
     return counts[key];
   };
 
   return (
     <div className="flex flex-wrap gap-2">
-      {filters.map(({ key, label }) => {
+      {filters.filter(({ key }) => key !== 'no_data' || counts.no_data > 0).map(({ key, label }) => {
         const isActive = activeFilter === key;
         const count = getCount(key);
 

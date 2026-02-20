@@ -269,7 +269,7 @@ async function tryJunoFlow(
         attended,
         total,
         percentage,
-        status: calculateStatus(percentage, threshold),
+        status: calculateStatus(percentage, threshold, total),
       };
     });
 

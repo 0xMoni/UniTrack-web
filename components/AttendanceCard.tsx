@@ -17,7 +17,7 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
   const [editing, setEditing] = useState(false);
   const { name, code, attended, total, percentage } = subject;
 
-  const status = calculateStatus(percentage, threshold);
+  const status = calculateStatus(percentage, threshold, total);
   const classesToBunk = calculateClassesToBunk(attended, total, threshold);
   const classesToAttend = calculateClassesToAttend(attended, total, threshold);
   const missed = total - attended;
@@ -32,12 +32,14 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
       ${getStatusBgColor(status)}
     `}>
       {/* Progress bar background */}
-      <div
-        className={`absolute inset-y-0 left-0 opacity-[0.07] ${
-          status === 'safe' ? 'bg-emerald-500' : status === 'critical' ? 'bg-amber-500' : 'bg-red-500'
-        }`}
-        style={{ width: `${Math.min(percentage, 100)}%` }}
-      />
+      {status !== 'no_data' && (
+        <div
+          className={`absolute inset-y-0 left-0 opacity-[0.07] ${
+            status === 'safe' ? 'bg-emerald-500' : status === 'critical' ? 'bg-amber-500' : 'bg-red-500'
+          }`}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      )}
 
       <div className="relative space-y-3">
         {/* Subject name and percentage */}
@@ -67,6 +69,9 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
 
         {/* Status message */}
         <div className={`text-sm font-medium ${getStatusTextColor(status)}`}>
+          {status === 'no_data' && (
+            <span>No classes conducted yet</span>
+          )}
           {status === 'safe' && (
             <span>You can skip {classesToBunk} more class{classesToBunk !== 1 ? 'es' : ''}</span>
           )}
@@ -79,20 +84,22 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
         </div>
 
         {/* Next class projection */}
-        <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
-          <span>Next class:</span>
-          <span className="text-emerald-500 font-medium">attend → {afterAttend}%</span>
-          <span className="text-red-400 font-medium">skip → {afterSkip}%</span>
-        </div>
+        {status !== 'no_data' && (
+          <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+            <span>Next class:</span>
+            <span className="text-emerald-500 font-medium">attend → {afterAttend}%</span>
+            <span className="text-red-400 font-medium">skip → {afterSkip}%</span>
+          </div>
+        )}
 
         {/* Progress bar + threshold badge */}
         <div className="space-y-1.5">
           <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden relative">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
-                status === 'safe' ? 'bg-emerald-500' : status === 'critical' ? 'bg-amber-500' : 'bg-red-500'
+                status === 'safe' ? 'bg-emerald-500' : status === 'critical' ? 'bg-amber-500' : status === 'no_data' ? 'bg-slate-400' : 'bg-red-500'
               }`}
-              style={{ width: `${Math.min(percentage, 100)}%` }}
+              style={{ width: `${status === 'no_data' ? 0 : Math.min(percentage, 100)}%` }}
             />
             {/* Threshold marker */}
             <div

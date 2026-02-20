@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { initializeAuth, getAuth, browserLocalPersistence, indexedDBLocalPersistence, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -27,7 +27,20 @@ function getApp(): FirebaseApp {
 
 export function getFirebaseAuth(): Auth {
   if (!_auth) {
-    _auth = getAuth(getApp());
+    if (typeof window !== 'undefined') {
+      // Use initializeAuth with explicit persistence so the session
+      // survives page refreshes (IndexedDB preferred, localStorage fallback).
+      try {
+        _auth = initializeAuth(getApp(), {
+          persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+        });
+      } catch {
+        // Already initialized by another import — reuse the existing instance
+        _auth = getAuth(getApp());
+      }
+    } else {
+      _auth = getAuth(getApp());
+    }
   }
   return _auth;
 }
