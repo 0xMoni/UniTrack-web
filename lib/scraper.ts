@@ -81,23 +81,19 @@ export async function scrapeAttendance(
   const jar = new CookieJar();
 
   // Strategy 1: Try JUNO ERP endpoints (fast, no Gemini cost)
-  let junoError = '';
   try {
     const junoResult = await tryJunoFlow(erpBase, jar, username, password, threshold);
     if (junoResult) return junoResult;
-    junoError = 'Not a JUNO ERP';
-  } catch (e) {
-    junoError = e instanceof Error ? e.message : 'Unknown error';
+  } catch {
+    // Not a JUNO ERP or JUNO flow failed — fall through to generic
   }
 
   // Strategy 2: Generic login + crawl + Gemini parse
-  let genericError = '';
   try {
     const genericResult = await tryGenericFlow(erpBase, new CookieJar(), username, password, threshold);
     if (genericResult) return genericResult;
-    genericError = 'Generic flow returned no data';
-  } catch (e) {
-    genericError = e instanceof Error ? e.message : 'Unknown error';
+  } catch {
+    // Generic flow failed — fall through to error
   }
 
   return {

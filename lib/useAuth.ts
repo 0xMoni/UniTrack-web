@@ -13,37 +13,32 @@ import { saveUserData } from './firestore';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const isClient = typeof window !== 'undefined' && !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const [loading, setLoading] = useState(isClient);
 
   useEffect(() => {
-    // Only subscribe on client when Firebase is configured
-    if (typeof window === 'undefined' || !process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    if (!isClient) return;
+
+    const auth = getFirebaseAuth();
+
+    // Wait for auth state to be fully restored from IndexedDB before
+    // subscribing. This prevents a flash of the login form on page reload.
+    let unsubscribe: (() => void) | undefined;
+
+    auth.authStateReady().then(() => {
+      setUser(auth.currentUser);
       setLoading(false);
-      return;
-    }
 
-    try {
-      const auth = getFirebaseAuth();
-
-      // Wait for auth state to be fully restored from IndexedDB before
-      // subscribing. This prevents a flash of the login form on page reload.
-      let unsubscribe: (() => void) | undefined;
-
-      auth.authStateReady().then(() => {
-        setUser(auth.currentUser);
-        setLoading(false);
-
-        // Now subscribe for future changes (login, logout, token refresh)
-        unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-          setUser(firebaseUser);
-        });
+      // Now subscribe for future changes (login, logout, token refresh)
+      unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        setUser(firebaseUser);
       });
-
-      return () => unsubscribe?.();
-    } catch {
+    }).catch(() => {
       setLoading(false);
-    }
-  }, []);
+    });
+
+    return () => unsubscribe?.();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = useCallback(async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
