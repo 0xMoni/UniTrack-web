@@ -13,32 +13,29 @@ import { saveUserData } from './firestore';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
-  const isClient = typeof window !== 'undefined' && !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  const [loading, setLoading] = useState(isClient);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      // No Firebase config — nothing to wait for.
+      // Use queueMicrotask to avoid synchronous setState in effect body.
+      queueMicrotask(() => setLoading(false));
+      return;
+    }
 
     const auth = getFirebaseAuth();
 
-    // Wait for auth state to be fully restored from IndexedDB before
-    // subscribing. This prevents a flash of the login form on page reload.
-    let unsubscribe: (() => void) | undefined;
-
-    auth.authStateReady().then(() => {
-      setUser(auth.currentUser);
-      setLoading(false);
-
-      // Now subscribe for future changes (login, logout, token refresh)
-      unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        setUser(firebaseUser);
-      });
-    }).catch(() => {
+    // onAuthStateChanged reliably waits for persistence (IndexedDB /
+    // localStorage) to be fully read before firing the first callback.
+    // This is more reliable than authStateReady() which can resolve
+    // before IndexedDB finishes loading in some environments.
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
       setLoading(false);
     });
 
-    return () => unsubscribe?.();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => unsubscribe();
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
