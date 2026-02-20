@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import ThemeToggle from './ThemeToggle';
 
 const LOADING_MESSAGES = [
@@ -107,7 +108,7 @@ export default function LoginForm(props: LoginFormProps) {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-10">
-          <img src="/logo.png" alt="UniTrack" className="w-16 h-16 mx-auto mb-5" />
+          <Image src="/logo.png" alt="UniTrack" width={64} height={64} className="mx-auto mb-5" />
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">UniTrack</h1>
           <p className="text-slate-400 dark:text-slate-500 mt-1 text-sm">Attendance Tracker</p>
         </div>

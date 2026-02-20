@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { Subject, Timetable } from '@/lib/types';
 import { getSubjectKey } from '@/lib/utils';
 
@@ -141,7 +142,7 @@ export default function TimetableSetup({ isOpen, onClose, onSave, subjects, curr
 
               {previewUrl ? (
                 <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600">
-                  <img src={previewUrl} alt="Timetable" className="w-full max-h-48 object-contain bg-slate-100 dark:bg-slate-700" />
+                  <Image src={previewUrl} alt="Timetable" width={400} height={192} className="w-full max-h-48 object-contain bg-slate-100 dark:bg-slate-700" />
                   {parsing && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                       <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-4 py-2 rounded-xl shadow-lg">

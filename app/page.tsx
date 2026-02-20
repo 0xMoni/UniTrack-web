@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import LoginForm from '@/components/LoginForm';
 import StudentInfo from '@/components/StudentInfo';
 import StatusFilter from '@/components/StatusFilter';
@@ -338,7 +339,7 @@ export default function Home() {
   if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <img src="/logo.png" alt="UniTrack" className="w-14 h-14 animate-pulse" />
+        <Image src="/logo.png" alt="UniTrack" width={56} height={56} className="animate-pulse" />
       </div>
     );
   }
@@ -363,7 +364,7 @@ export default function Home() {
   if (!isInitialized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <img src="/logo.png" alt="UniTrack" className="w-14 h-14 animate-pulse" />
+        <Image src="/logo.png" alt="UniTrack" width={56} height={56} className="animate-pulse" />
       </div>
     );
   }
@@ -439,7 +440,7 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-100 dark:border-slate-800">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="UniTrack" className="w-8 h-8" />
+            <Image src="/logo.png" alt="UniTrack" width={32} height={32} />
             <h1 className="text-lg font-bold text-slate-900 dark:text-white">UniTrack</h1>
           </div>
           <div className="flex items-center gap-1">
