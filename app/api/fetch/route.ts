@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FetchResponse } from '@/lib/types';
+import { scrapeAttendance } from '@/lib/scraper';
 
 export const maxDuration = 60;
 
@@ -24,8 +25,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<FetchResp
         { status: 400 }
       );
     }
-
-    const { scrapeAttendance } = await import('@/lib/scraper');
 
     // Race between scraper and a 30s timeout
     const result = await Promise.race([

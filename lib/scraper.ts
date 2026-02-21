@@ -114,7 +114,7 @@ async function tryJunoFlow(
   // Step 1: Check if this is a JUNO ERP by trying the login page
   let loginPage: Response;
   try {
-    loginPage = await fetchWithTimeout(`${erpBase}/login.htm`, { cache: 'no-store' });
+    loginPage = await fetchWithTimeout(`${erpBase}/login.htm`, { cache: 'no-store' }, 10_000);
   } catch {
     return null; // not reachable or not JUNO — fall through to generic
   }
@@ -168,7 +168,7 @@ async function tryJunoFlow(
       body: loginBody.toString(),
       redirect: 'manual',
       cache: 'no-store',
-    }, 20_000);
+    }, 15_000);
     jar.update(loginRes);
 
     const location = loginRes.headers.get('location') || '';
@@ -182,68 +182,88 @@ async function tryJunoFlow(
     const dashboard = await fetchWithTimeout(dashboardUrl, {
       headers: { 'Cookie': jar.toString() },
       cache: 'no-store',
-    });
+    }, 10_000);
     jar.update(dashboard);
 
     if (!dashboard.ok) {
       return { success: false, error: 'Logged in but could not access the ERP dashboard' };
     }
 
-    // Step 4: Fetch academic info
+    // Step 4: Run academic info, name parse, and speculative attendance fetch in parallel
     let studentName = 'Student';
     let rollNo = '';
 
-    try {
-      const academicRes = await fetchWithTimeout(`${erpBase}/stu_getAcademicInformationNew.json`, {
-        headers: { 'Cookie': jar.toString() },
-        cache: 'no-store',
-      });
-      if (academicRes.ok) {
-        const academic: AcademicInfoResponse = await academicRes.json();
-        if (academic.hasAcademicInfo) {
-          rollNo = academic.AcademicInfo.rollNo || '';
-        }
-      }
-    } catch { /* continue without academic info */ }
+    const dashHtml = await dashboard.text();
 
-    // Get student name from dashboard HTML
+    // Speculative fetch: try getting attendance JSON directly (skips attendance page visit)
+    const speculativeFetch = fetchWithTimeout(`${erpBase}/stu_getSubjectOnChangeWithSemId1.json`, {
+      headers: { 'Cookie': jar.toString() },
+      cache: 'no-store',
+    }, 10_000).then(async (res) => {
+      if (!res.ok) return null;
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        if (Array.isArray(data) && data.length > 0) return { data, text };
+      } catch { /* not valid JSON */ }
+      return null;
+    }).catch(() => null);
+
+    const academicFetch = fetchWithTimeout(`${erpBase}/stu_getAcademicInformationNew.json`, {
+      headers: { 'Cookie': jar.toString() },
+      cache: 'no-store',
+    }, 8_000).then(async (res) => {
+      if (!res.ok) return null;
+      const academic: AcademicInfoResponse = await res.json();
+      if (academic.hasAcademicInfo) return academic.AcademicInfo.rollNo || '';
+      return null;
+    }).catch(() => null);
+
+    // Parse student name from dashboard HTML (instant, no network)
     try {
-      const dashHtml = await dashboard.text();
       const nameMatch = dashHtml.match(/studentName"?\s+value="([^"]+)"/i);
       if (nameMatch?.[1]) {
         studentName = nameMatch[1].replace(/\s+/g, ' ').trim();
       }
     } catch { /* ignore */ }
 
-    // Step 5: Visit attendance page to set up session state
-    try {
-      const attendancePage = await fetchWithTimeout(`${erpBase}/studentCourseFileNew.htm?shwA=%2700A%27`, {
-        headers: { 'Cookie': jar.toString() },
-        cache: 'no-store',
-      });
-      jar.update(attendancePage);
-    } catch { /* continue anyway */ }
+    const [speculativeResult, academicResult] = await Promise.all([speculativeFetch, academicFetch]);
 
-    // Step 6: Fetch subject-wise attendance
-    const subjectsRes = await fetchWithTimeout(`${erpBase}/stu_getSubjectOnChangeWithSemId1.json`, {
-      headers: { 'Cookie': jar.toString() },
-      cache: 'no-store',
-    });
-
-    if (!subjectsRes.ok) {
-      return { success: false, error: 'Logged in but the ERP did not return attendance data — try again in a moment' };
-    }
+    if (academicResult) rollNo = academicResult;
 
     let subjectData: SubjectApiResponse[];
-    const rawText = await subjectsRes.text();
-    try {
-      subjectData = JSON.parse(rawText);
-    } catch {
-      // If the ERP returned HTML, the session isn't authenticated
-      if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
-        return { success: false, error: 'Login failed — check your username and password' };
+
+    if (speculativeResult) {
+      // Speculative fetch succeeded — skip attendance page visit
+      subjectData = speculativeResult.data;
+    } else {
+      // Speculative fetch failed — fall back to visiting attendance page + retry
+      try {
+        const attendancePage = await fetchWithTimeout(`${erpBase}/studentCourseFileNew.htm?shwA=%2700A%27`, {
+          headers: { 'Cookie': jar.toString() },
+          cache: 'no-store',
+        }, 8_000);
+        jar.update(attendancePage);
+      } catch { /* continue anyway */ }
+
+      const subjectsRes = await fetchWithTimeout(`${erpBase}/stu_getSubjectOnChangeWithSemId1.json`, {
+        headers: { 'Cookie': jar.toString() },
+        cache: 'no-store',
+      }, 10_000);
+
+      if (!subjectsRes.ok) {
+        return { success: false, error: 'Logged in but the ERP did not return attendance data — try again in a moment' };
       }
-      return { success: false, error: 'ERP returned unexpected data — try again in a moment' };
+
+      const rawText = await subjectsRes.text();
+      try {
+        subjectData = JSON.parse(rawText);
+      } catch {
+        if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
+          return { success: false, error: 'Login failed — check your username and password' };
+        }
+        return { success: false, error: 'ERP returned unexpected data — try again in a moment' };
+      }
     }
 
     if (!Array.isArray(subjectData) || subjectData.length === 0) {
@@ -518,9 +538,12 @@ async function findAttendancePage(
 ): Promise<string | null> {
   const candidates: { url: string; score: number; html: string }[] = [];
 
-  // Extract links from dashboard and filter for attendance-related ones
-  const linkRegex = /<a[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  // Collect all candidate URLs first
+  const allUrls: string[] = [];
   const seenUrls = new Set<string>();
+
+  // Extract attendance-related links from dashboard
+  const linkRegex = /<a[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let linkMatch: RegExpExecArray | null;
 
   while ((linkMatch = linkRegex.exec(dashboardHtml)) !== null) {
@@ -532,41 +555,41 @@ async function findAttendancePage(
     const fullUrl = href.startsWith('http') ? href : new URL(href, erpBase).href;
     if (seenUrls.has(fullUrl)) continue;
     seenUrls.add(fullUrl);
-
-    try {
-      const res = await fetchWithTimeout(fullUrl, {
-        headers: { 'Cookie': jar.toString() },
-        cache: 'no-store',
-        redirect: 'follow',
-      }, 10_000);
-      jar.update(res);
-      if (!res.ok) continue;
-
-      const html = await res.text();
-      const score = scoreAttendanceContent(html);
-      if (score > 0) candidates.push({ url: fullUrl, score, html });
-    } catch { /* skip broken links */ }
+    allUrls.push(fullUrl);
   }
 
-  // Also try common paths
+  // Add common paths
   for (const path of COMMON_ATTENDANCE_PATHS) {
     const url = `${erpBase}${path}`;
     if (seenUrls.has(url)) continue;
     seenUrls.add(url);
+    allUrls.push(url);
+  }
 
-    try {
-      const res = await fetchWithTimeout(url, {
-        headers: { 'Cookie': jar.toString() },
-        cache: 'no-store',
-        redirect: 'follow',
-      }, 10_000);
-      jar.update(res);
-      if (!res.ok) continue;
+  // Fetch all candidate URLs in parallel batches of 5
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < allUrls.length; i += BATCH_SIZE) {
+    const batch = allUrls.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (url) => {
+        const res = await fetchWithTimeout(url, {
+          headers: { 'Cookie': jar.toString() },
+          cache: 'no-store',
+          redirect: 'follow',
+        }, 10_000);
+        jar.update(res);
+        if (!res.ok) return null;
+        const html = await res.text();
+        const score = scoreAttendanceContent(html);
+        return score > 0 ? { url, score, html } : null;
+      })
+    );
 
-      const html = await res.text();
-      const score = scoreAttendanceContent(html);
-      if (score > 0) candidates.push({ url, score, html });
-    } catch { /* skip */ }
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        candidates.push(result.value);
+      }
+    }
   }
 
   // Also check dashboard itself — some ERPs show attendance on the main page
