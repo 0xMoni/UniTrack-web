@@ -59,7 +59,7 @@ export default function Home() {
     const safety = setTimeout(() => {
       setIsLoading(false);
       setError('Request timed out. Please try again.');
-    }, 40_000);
+    }, 28_000);
     return () => clearTimeout(safety);
   }, [isLoading]);
 
@@ -217,7 +217,7 @@ export default function Home() {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 35_000); // 35s fetch timeout
+      const timeout = setTimeout(() => controller.abort(), 25_000); // 25s fetch timeout
 
       const response = await fetch('/api/fetch', {
         method: 'POST',

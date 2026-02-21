@@ -30,7 +30,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<FetchResp
     const result = await Promise.race([
       scrapeAttendance(erpUrl, username, password, threshold),
       new Promise<FetchResponse>((_, reject) =>
-        setTimeout(() => reject(new Error('ERP server took too long to respond. Try again later.')), 30_000)
+        setTimeout(() => reject(new Error('ERP server took too long to respond. Try again later.')), 20_000)
       ),
     ]);
 
