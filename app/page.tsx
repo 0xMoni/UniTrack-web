@@ -269,31 +269,6 @@ export default function Home() {
     }
   }, [threshold, user, attendanceData, premiumStatus.isPremium, refreshCount, refreshCountResetMonth]);
 
-  // ── Handle refresh ──
-  const handleRefresh = async () => {
-    if (!user) return;
-
-    // Check refresh limit for free users
-    if (!premiumStatus.canRefresh) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
-    // Decrypt saved ERP credentials using UID and fetch
-    try {
-      const creds = await loadErpCredentials(user.uid);
-      if (creds) {
-        await fetchAttendance(creds.erpUrl, creds.username, creds.password);
-        return;
-      }
-    } catch {
-      // Firestore/decryption error — fall through to show message
-    }
-
-    // No saved credentials — show error
-    setError('Could not load saved ERP credentials. Please log out and reconnect your ERP.');
-  };
-
   // ── Auto-refresh callback (best-effort, silent errors) ──
   const autoRefresh = useCallback(async () => {
     if (!user || !attendanceData || !premiumStatus.canRefresh) return;
@@ -543,9 +518,6 @@ export default function Home() {
         <StudentInfo
           student={attendanceData.student}
           lastUpdated={attendanceData.lastUpdated}
-          onRefresh={handleRefresh}
-          isLoading={isLoading || isAutoRefreshing}
-          premiumStatus={premiumStatus}
         />
 
         {/* Auto-refresh indicator */}
