@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import LoginForm from '@/components/LoginForm';
 import StudentInfo from '@/components/StudentInfo';
@@ -26,6 +26,8 @@ import {
   calculateStatus, getSubjectKey, getEffectiveThreshold,
 } from '@/lib/utils';
 
+const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
   const { user, loading: authLoading, login, signUp, logout } = useAuth();
@@ -43,6 +45,8 @@ export default function Home() {
   const [timetable, setTimetable] = useState<Timetable>({});
   const [showTimetableSetup, setShowTimetableSetup] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  const autoRefreshTriggered = useRef(false);
 
   // Premium state
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
@@ -79,6 +83,8 @@ export default function Home() {
     setRefreshCountResetMonth('');
     setShowUpgradeModal(false);
     setIsInitialized(false);
+    setIsAutoRefreshing(false);
+    autoRefreshTriggered.current = false;
     setIsLoading(false);
     setError(null);
     setAuthError(null);
@@ -288,6 +294,59 @@ export default function Home() {
     setError('Could not load saved ERP credentials. Please log out and reconnect your ERP.');
   };
 
+  // ── Auto-refresh callback (best-effort, silent errors) ──
+  const autoRefresh = useCallback(async () => {
+    if (!user || !attendanceData || !premiumStatus.canRefresh) return;
+
+    setIsAutoRefreshing(true);
+    try {
+      const creds = await loadErpCredentials(user.uid);
+      if (!creds) return;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 25_000);
+
+      const response = await fetch('/api/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ erpUrl: creds.erpUrl, username: creds.username, password: creds.password, threshold }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      const result: FetchResponse = await response.json();
+
+      if (result.success && result.data) {
+        setAttendanceData(result.data);
+
+        // Increment refresh count for free users
+        if (!premiumStatus.isPremium) {
+          const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+          const updated = await incrementRefreshCount(user.uid, currentMonth, refreshCount, refreshCountResetMonth);
+          setRefreshCount(updated.refreshCount);
+          setRefreshCountResetMonth(updated.refreshCountResetMonth);
+        }
+      }
+    } catch {
+      // Silent failure — auto-refresh is best-effort
+    } finally {
+      setIsAutoRefreshing(false);
+    }
+  }, [user, attendanceData, premiumStatus.canRefresh, premiumStatus.isPremium, threshold, refreshCount, refreshCountResetMonth]);
+
+  // ── Trigger auto-refresh once after initialization if data is stale ──
+  useEffect(() => {
+    if (!isInitialized || !attendanceData || autoRefreshTriggered.current) return;
+    autoRefreshTriggered.current = true;
+
+    const lastUpdated = new Date(attendanceData.lastUpdated).getTime();
+    const age = Date.now() - lastUpdated;
+
+    if (age > STALE_THRESHOLD_MS) {
+      autoRefresh();
+    }
+  }, [isInitialized, attendanceData, autoRefresh]);
+
   // ── Logout ──
   const handleLogout = async () => {
     setAttendanceData(null);
@@ -485,9 +544,20 @@ export default function Home() {
           student={attendanceData.student}
           lastUpdated={attendanceData.lastUpdated}
           onRefresh={handleRefresh}
-          isLoading={isLoading}
+          isLoading={isLoading || isAutoRefreshing}
           premiumStatus={premiumStatus}
         />
+
+        {/* Auto-refresh indicator */}
+        {isAutoRefreshing && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-sm">
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Updating attendance data...
+          </div>
+        )}
 
         {/* Today's Classes */}
         {hasTimetable ? (
