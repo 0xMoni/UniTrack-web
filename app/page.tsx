@@ -57,16 +57,6 @@ export default function Home() {
 
   const premiumStatus = usePremium({ premiumUntil, trialEndsAt, refreshCount, refreshCountResetMonth });
 
-  // Safety: auto-reset loading after 40s to prevent stuck spinners
-  useEffect(() => {
-    if (!isLoading) return;
-    const safety = setTimeout(() => {
-      setIsLoading(false);
-      setError('Request timed out. Please try again.');
-    }, 28_000);
-    return () => clearTimeout(safety);
-  }, [isLoading]);
-
   // ── Load data from Firestore when user authenticates ──
   useEffect(() => {
     // Always clear stale state when user changes (logout, switch account, etc.)
