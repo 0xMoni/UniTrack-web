@@ -80,6 +80,7 @@ export function calculateClassesToAttend(
   // attended * 100 + x * 100 >= total * threshold + x * threshold
   // x * (100 - threshold) >= total * threshold - attended * 100
   // x >= (total * threshold - attended * 100) / (100 - threshold)
+  if (threshold >= 100) return Infinity;
   const needed = Math.ceil(
     (total * threshold - attended * 100) / (100 - threshold)
   );
