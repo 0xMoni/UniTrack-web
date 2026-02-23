@@ -17,7 +17,7 @@ import PremiumGate from '@/components/PremiumGate';
 import UpgradeModal from '@/components/UpgradeModal';
 import { useTheme } from '@/lib/useTheme';
 import { useAuth } from '@/lib/useAuth';
-import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, incrementRefreshCount, savePayment, PaymentRecord } from '@/lib/firestore';
+import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, incrementRefreshCount, savePayment, subscribeToUserData, PaymentRecord } from '@/lib/firestore';
 import { usePremium } from '@/lib/usePremium';
 import { AttendanceData, StatusFilter as StatusFilterType, FetchResponse, Timetable } from '@/lib/types';
 import {
@@ -152,6 +152,18 @@ export default function Home() {
     })();
 
     return () => { cancelled = true; };
+  }, [user]);
+
+  // ── Real-time sync for premium status ──
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = subscribeToUserData(user.uid, (data) => {
+      if (data.premiumUntil) setPremiumUntil(data.premiumUntil);
+      if (data.trialEndsAt) setTrialEndsAt(data.trialEndsAt);
+      if (data.refreshCount !== undefined) setRefreshCount(data.refreshCount);
+      if (data.refreshCountResetMonth) setRefreshCountResetMonth(data.refreshCountResetMonth);
+    });
+    return () => unsubscribe();
   }, [user]);
 
   // ── Save attendance to Firestore when it changes ──

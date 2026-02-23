@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { getFirebaseDb } from './firebase';
 import { AttendanceData, Timetable } from './types';
 import { EncryptedData, encryptCredentials, decryptCredentials } from './crypto';
@@ -82,6 +82,13 @@ export async function savePayment(uid: string, premiumUntil: string, payment: Pa
     premiumUntil,
     payments: arrayUnion(payment),
   }, { merge: true });
+}
+
+export function subscribeToUserData(uid: string, callback: (data: UserData) => void): () => void {
+  return onSnapshot(doc(getFirebaseDb(), 'users', uid), (snap) => {
+    if (!snap.exists()) return;
+    callback({ ...DEFAULT_USER_DATA, ...snap.data() } as UserData);
+  });
 }
 
 export async function incrementRefreshCount(uid: string, currentMonth: string, currentCount: number, currentResetMonth: string): Promise<{ refreshCount: number; refreshCountResetMonth: string }> {
