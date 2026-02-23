@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const prompt = `You are analyzing a college/university timetable image. Extract the weekly schedule.
 
@@ -42,7 +41,7 @@ Where keys are: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturd
 Values are arrays of subject codes from the known list above.
 If a day has no classes, use an empty array.`;
 
-    const result = await model.generateContent([
+    const contentPayload = [
       prompt,
       {
         inlineData: {
@@ -50,9 +49,38 @@ If a day has no classes, use an empty array.`;
           mimeType: mimeType || 'image/png',
         },
       },
-    ]);
+    ];
 
-    const text = result.response.text().trim();
+    // Try models in order of preference, fall back on quota/rate errors
+    const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+    let text = '';
+    let lastError: Error | null = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(contentPayload);
+        text = result.response.text().trim();
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const msg = lastError.message.toLowerCase();
+        // Only retry on quota/rate limit errors, not on other errors
+        if (msg.includes('quota') || msg.includes('rate') || msg.includes('429') || msg.includes('resource_exhausted')) {
+          continue;
+        }
+        // For non-quota errors, throw immediately
+        throw lastError;
+      }
+    }
+
+    if (lastError) {
+      return NextResponse.json(
+        { success: false, error: 'AI service is temporarily unavailable. Please try again in a few minutes.' },
+        { status: 503 }
+      );
+    }
 
     // Extract JSON from the response (handle markdown code blocks)
     let jsonStr = text;
@@ -77,10 +105,15 @@ If a day has no classes, use an empty array.`;
 
     return NextResponse.json({ success: true, timetable });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to parse timetable image';
+    const raw = error instanceof Error ? error.message : 'Failed to parse timetable image';
+    // Return a user-friendly message, not raw API errors
+    const isQuota = raw.toLowerCase().includes('quota') || raw.toLowerCase().includes('rate');
+    const message = isQuota
+      ? 'AI service is temporarily unavailable. Please try again in a few minutes.'
+      : 'Failed to parse timetable from the image. Please try a clearer photo.';
     return NextResponse.json(
       { success: false, error: message },
-      { status: 500 }
+      { status: isQuota ? 503 : 500 }
     );
   }
 }
