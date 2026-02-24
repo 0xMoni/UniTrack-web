@@ -13,7 +13,6 @@ export async function POST(request: Request) {
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
     if (!keyId || !keySecret) {
-      console.error('Missing Razorpay env vars');
       return NextResponse.json({ error: 'Payment service not configured' }, { status: 500 });
     }
 
@@ -35,7 +34,6 @@ export async function POST(request: Request) {
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
     });
   } catch (err: unknown) {
-    console.error('Create order error:', JSON.stringify(err, null, 2));
     const razorpayErr = err as { error?: { description?: string }; message?: string; statusCode?: number };
     const message = razorpayErr?.error?.description || razorpayErr?.message || 'Failed to create order';
     return NextResponse.json({ error: message }, { status: 500 });

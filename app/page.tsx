@@ -246,8 +246,8 @@ export default function Home() {
         // Encrypt & save ERP credentials (encrypted with UID, no password needed)
         try {
           await saveErpCredentials(user.uid, erpUrl, username, password);
-        } catch (saveErr) {
-          console.error('Failed to save ERP credentials:', saveErr);
+        } catch {
+          // Credential save failed — non-critical, user can re-enter next time
         }
 
         // Increment refresh count for free users (skip on first-ever fetch)

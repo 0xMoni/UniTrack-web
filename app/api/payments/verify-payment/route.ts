@@ -39,8 +39,7 @@ export async function POST(request: Request) {
     };
 
     return NextResponse.json({ premiumUntil, payment });
-  } catch (err) {
-    console.error('Verify payment error:', err);
+  } catch {
     return NextResponse.json({ error: 'Payment verification failed' }, { status: 500 });
   }
 }
