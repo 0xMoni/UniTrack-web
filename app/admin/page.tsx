@@ -11,6 +11,9 @@ import type { PaymentRecord, UserData } from '../../lib/firestore';
 
 interface UserRow {
   uid: string;
+  studentName: string;
+  usn: string;
+  erpUrl: string;
   premiumUntil: string | null;
   trialEndsAt: string | null;
   refreshCount: number;
@@ -159,6 +162,9 @@ function Dashboard() {
         const d = doc.data() as Partial<UserData>;
         rows.push({
           uid: doc.id,
+          studentName: d.attendance?.student?.name ?? '',
+          usn: d.attendance?.student?.usn ?? '',
+          erpUrl: d.erpUrl ?? '',
           premiumUntil: d.premiumUntil ?? null,
           trialEndsAt: d.trialEndsAt ?? null,
           refreshCount: d.refreshCount ?? 0,
@@ -214,7 +220,11 @@ function Dashboard() {
   const filteredUsers = useMemo(() => {
     if (!search) return users;
     const q = search.toLowerCase();
-    return users.filter((u) => u.uid.toLowerCase().includes(q));
+    return users.filter((u) =>
+      u.uid.toLowerCase().includes(q) ||
+      u.studentName.toLowerCase().includes(q) ||
+      u.usn.toLowerCase().includes(q)
+    );
   }, [users, search]);
 
   /* Filtered payments */
@@ -374,7 +384,8 @@ function Dashboard() {
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3">UID</th>
+                  <th className="px-4 py-3">Student</th>
+                  <th className="px-4 py-3">USN</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Premium Until</th>
                   <th className="px-4 py-3">Trial Ends</th>
@@ -387,7 +398,7 @@ function Dashboard() {
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-12 text-center text-slate-500"
                     >
                       No users found
@@ -401,8 +412,12 @@ function Dashboard() {
                         key={u.uid}
                         className="hover:bg-slate-800/40"
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-slate-300 max-w-[180px] truncate">
-                          {u.uid}
+                        <td className="px-4 py-3 text-slate-300">
+                          <div className="font-medium text-sm">{u.studentName || 'No data'}</div>
+                          <div className="font-mono text-[10px] text-slate-500 mt-0.5 truncate max-w-[140px]">{u.uid}</div>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                          {u.usn || '-'}
                         </td>
                         <td className={`px-4 py-3 font-medium ${status.color}`}>
                           {status.text}
