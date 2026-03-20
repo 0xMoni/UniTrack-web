@@ -9,6 +9,7 @@ import type { PaymentRecord } from '../../lib/firestore';
 
 interface UserRow {
   uid: string;
+  email: string;
   studentName: string;
   usn: string;
   erpUrl: string;
@@ -199,7 +200,7 @@ function Dashboard() {
   /* All payments flat list */
   const allPayments = useMemo(() => {
     return users
-      .flatMap((u) => u.payments.map((p) => ({ ...p, uid: u.uid })))
+      .flatMap((u) => u.payments.map((p) => ({ ...p, uid: u.uid, studentName: u.studentName, email: u.email })))
       .sort(
         (a, b) =>
           new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime(),
@@ -212,6 +213,7 @@ function Dashboard() {
     const q = search.toLowerCase();
     return users.filter((u) =>
       u.uid.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
       u.studentName.toLowerCase().includes(q) ||
       u.usn.toLowerCase().includes(q)
     );
@@ -375,6 +377,7 @@ function Dashboard() {
               <thead className="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-3">Student</th>
+                  <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">USN</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Premium Until</th>
@@ -388,7 +391,7 @@ function Dashboard() {
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-4 py-12 text-center text-slate-500"
                     >
                       No users found
@@ -405,6 +408,9 @@ function Dashboard() {
                         <td className="px-4 py-3 text-slate-300">
                           <div className="font-medium text-sm">{u.studentName || 'No data'}</div>
                           <div className="font-mono text-[10px] text-slate-500 mt-0.5 truncate max-w-[140px]">{u.uid}</div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400 max-w-[180px] truncate">
+                          {u.email || '-'}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-400">
                           {u.usn || '-'}
@@ -442,7 +448,7 @@ function Dashboard() {
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3">User ID</th>
+                  <th className="px-4 py-3">Student</th>
                   <th className="px-4 py-3">Payment ID</th>
                   <th className="px-4 py-3 text-right">Amount</th>
                   <th className="px-4 py-3">Date</th>
@@ -465,8 +471,9 @@ function Dashboard() {
                       key={`${p.uid}-${p.paymentId}-${i}`}
                       className="hover:bg-slate-800/40"
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-slate-300 max-w-[180px] truncate">
-                        {p.uid}
+                      <td className="px-4 py-3 text-slate-300">
+                        <div className="font-medium text-sm">{p.studentName || 'No data'}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{p.email || p.uid}</div>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-400">
                         {p.paymentId || '-'}
