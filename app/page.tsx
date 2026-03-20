@@ -638,6 +638,10 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 mt-6 pb-4">
+          © 2026 0xMoni
+        </p>
       </main>
 
       {/* Threshold Modal */}
