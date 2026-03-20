@@ -16,7 +16,7 @@ Track your university attendance from any ERP portal. Know exactly which classes
 - **Cloud Sync** — Firebase Auth + Firestore for persistent accounts across devices
 - **Encrypted Credentials** — ERP passwords encrypted client-side with AES-GCM
 
-## Premium (Rs 29/month)
+## Premium (Rs 19/month)
 
 UniTrack uses a freemium model with manual monthly payments via Razorpay.
 
