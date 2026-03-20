@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { getFirebaseDb } from '../../lib/firebase';
-import type { PaymentRecord, UserData } from '../../lib/firestore';
+import type { PaymentRecord } from '../../lib/firestore';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -72,6 +70,7 @@ function PasswordGate({ onAuth }: { onAuth: () => void }) {
     e.preventDefault();
     if (pw === 'unitrack-admin-0xmoni') {
       sessionStorage.setItem('admin_auth', '1');
+      sessionStorage.setItem('unitrack-admin', pw);
       onAuth();
     } else {
       setError(true);
@@ -155,24 +154,15 @@ function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const db = getFirebaseDb();
-      const snap = await getDocs(collection(db, 'users'));
-      const rows: UserRow[] = [];
-      snap.forEach((doc) => {
-        const d = doc.data() as Partial<UserData>;
-        rows.push({
-          uid: doc.id,
-          studentName: d.attendance?.student?.name ?? '',
-          usn: d.attendance?.student?.usn ?? '',
-          erpUrl: d.erpUrl ?? '',
-          premiumUntil: d.premiumUntil ?? null,
-          trialEndsAt: d.trialEndsAt ?? null,
-          refreshCount: d.refreshCount ?? 0,
-          lastSynced: d.lastSynced ?? '',
-          payments: d.payments ?? [],
-        });
+      const password = sessionStorage.getItem('unitrack-admin');
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
       });
-      setUsers(rows);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load data');
+      setUsers(data.users);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
