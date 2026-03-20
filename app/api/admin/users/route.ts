@@ -6,13 +6,12 @@ const ADMIN_PASSWORD = 'unitrack-admin-0xmoni';
 
 function getAdminDb() {
   if (getApps().length === 0) {
-    const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '').trim();
-    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-    if (clientEmail && privateKey) {
-      initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (serviceAccount) {
+      const parsed = JSON.parse(serviceAccount);
+      initializeApp({ credential: cert(parsed) });
     } else {
+      const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '').trim();
       initializeApp({ projectId });
     }
   }

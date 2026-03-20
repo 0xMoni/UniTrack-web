@@ -6,14 +6,12 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 // Initialize Firebase Admin (server-side)
 function getAdminDb() {
   if (getApps().length === 0) {
-    const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '').trim();
-    const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-    if (clientEmail && privateKey) {
-      initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (serviceAccount) {
+      const parsed = JSON.parse(serviceAccount);
+      initializeApp({ credential: cert(parsed) });
     } else {
-      // Fallback: initialize without credentials (works in some environments)
+      const projectId = (process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '').trim();
       initializeApp({ projectId });
     }
   }
