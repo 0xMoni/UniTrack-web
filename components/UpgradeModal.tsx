@@ -157,7 +157,7 @@ export default function UpgradeModal({ isOpen, onClose, premiumStatus, uid, emai
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-900 dark:text-white">Premium</p>
-                <p className="text-lg font-bold text-indigo-500">Rs 29<span className="text-xs font-normal text-slate-400">/mo</span></p>
+                <p className="text-lg font-bold text-indigo-500">Rs 19<span className="text-xs font-normal text-slate-400">/mo</span></p>
               </div>
               <ul className="space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
                 <li className="flex items-center gap-1.5">
@@ -191,7 +191,7 @@ export default function UpgradeModal({ isOpen, onClose, premiumStatus, uid, emai
             disabled={loading}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-white font-semibold hover:from-indigo-600 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            {loading ? 'Processing...' : premiumStatus.isPaidPremium ? 'Renew — Rs 29' : 'Pay Rs 29'}
+            {loading ? 'Processing...' : premiumStatus.isPaidPremium ? 'Renew — Rs 19' : 'Pay Rs 19'}
           </button>
           <p className="text-[11px] text-center text-slate-400 dark:text-slate-500">
             One-time payment for 30 days. No auto-renewal.

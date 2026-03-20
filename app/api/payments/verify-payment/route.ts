@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const payment = {
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
-      amount: 2900,
+      amount: 1900,
       currency: 'INR',
       paidAt: now.toISOString(),
       premiumUntil,
