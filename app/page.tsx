@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import LoginForm from '@/components/LoginForm';
 import StudentInfo from '@/components/StudentInfo';
 import StatusFilter from '@/components/StatusFilter';
@@ -11,10 +12,11 @@ import TimetableSetup from '@/components/TimetableSetup';
 import TodayCard from '@/components/TodayCard';
 import WeekOverview from '@/components/WeekOverview';
 import OverallStats from '@/components/OverallStats';
-import ThemeToggle from '@/components/ThemeToggle';
-import PremiumBadge from '@/components/PremiumBadge';
+import Header from '@/components/Header';
 import PremiumGate from '@/components/PremiumGate';
 import UpgradeModal from '@/components/UpgradeModal';
+import VacationPlanner from '@/components/VacationPlanner';
+import { SkeletonDashboard } from '@/components/Skeleton';
 import { useTheme } from '@/lib/useTheme';
 import { useAuth } from '@/lib/useAuth';
 import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, incrementRefreshCount, savePayment, subscribeToUserData, PaymentRecord } from '@/lib/firestore';
@@ -34,7 +36,6 @@ export default function Home() {
 
   const [attendanceData, setAttendanceData] = useState<AttendanceData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<StatusFilterType>('all');
   const [savedUsername, setSavedUsername] = useState('');
@@ -76,7 +77,6 @@ export default function Home() {
     setIsAutoRefreshing(false);
     autoRefreshTriggered.current = false;
     setIsLoading(false);
-    setError(null);
     setAuthError(null);
 
     if (!user) return;
@@ -221,7 +221,6 @@ export default function Home() {
   const fetchAttendance = useCallback(async (erpUrl: string, username: string, password: string) => {
     if (!user) return;
     setIsLoading(true);
-    setError(null);
 
     try {
       const controller = new AbortController();
@@ -258,13 +257,13 @@ export default function Home() {
           setRefreshCountResetMonth(updated.refreshCountResetMonth);
         }
       } else {
-        setError(result.error || 'Failed to fetch attendance data');
+        toast.error(result.error || 'Failed to fetch attendance data');
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setError('Request timed out — the ERP server took too long to respond. Try again.');
+        toast.error('Request timed out — the ERP server took too long to respond. Try again.');
       } else {
-        setError(err instanceof Error ? err.message : 'Network error — check your connection');
+        toast.error(err instanceof Error ? err.message : 'Network error — check your connection');
       }
     } finally {
       setIsLoading(false);
@@ -374,7 +373,7 @@ export default function Home() {
   // ── Loading state ──
   if (!mounted || authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
         <Image src="/logo.png" alt="UniTrack" width={56} height={56} className="animate-pulse" />
       </div>
     );
@@ -399,48 +398,28 @@ export default function Home() {
   // ── Logged in but Firestore data still loading ──
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-        <Image src="/logo.png" alt="UniTrack" width={56} height={56} className="animate-pulse" />
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <SkeletonDashboard />
+        </div>
       </div>
     );
   }
 
-  // ── Error toast (reused across views) ──
-  const errorToast = error && (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50">
-      <div className="flex items-start gap-3">
-        <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div>
-          <p className="font-medium text-sm">Error</p>
-          <p className="text-sm opacity-90">{error}</p>
-        </div>
-        <button onClick={() => setError(null)} className="ml-auto">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
 
   // ── Logged in but no attendance data → ERP connection form ──
   if (!attendanceData) {
     return (
-      <>
-        <LoginForm
-          mode="erp"
-          onSubmit={fetchAttendance}
-          isLoading={isLoading}
-          savedUsername={savedUsername}
-          savedErpUrl={savedErpUrl}
-          dark={dark}
-          onToggleTheme={toggleTheme}
-          onLogout={handleLogout}
-        />
-        {errorToast}
-      </>
+      <LoginForm
+        mode="erp"
+        onSubmit={fetchAttendance}
+        isLoading={isLoading}
+        savedUsername={savedUsername}
+        savedErpUrl={savedErpUrl}
+        dark={dark}
+        onToggleTheme={toggleTheme}
+        onLogout={handleLogout}
+      />
     );
   }
 
@@ -472,79 +451,26 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-100 dark:border-slate-800">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="UniTrack" width={32} height={32} />
-            <h1 className="text-lg font-bold text-slate-900 dark:text-white">UniTrack</h1>
-          </div>
-          <div className="flex items-center gap-1">
-            <PremiumBadge status={premiumStatus} onUpgradeClick={() => setShowUpgradeModal(true)} />
-            <ThemeToggle dark={dark} onToggle={toggleTheme} />
-            <a
-              href="https://github.com/0xMoni/UniTrack-app/releases/latest"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-              title="Download Android App"
-            >
-              <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </a>
-            <button
-              onClick={() => premiumStatus.isPremium ? setShowTimetableSetup(true) : setShowUpgradeModal(true)}
-              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-              title="Timetable"
-            >
-              <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setShowThresholdModal(true)}
-              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-              title="Settings"
-            >
-              <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-              title="Logout"
-            >
-              <svg className="w-5 h-5 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header
+        dark={dark}
+        onToggleTheme={toggleTheme}
+        premiumStatus={premiumStatus}
+        onUpgradeClick={() => setShowUpgradeModal(true)}
+        onThresholdClick={() => setShowThresholdModal(true)}
+        onTimetableClick={() => premiumStatus.isPremium ? setShowTimetableSetup(true) : setShowUpgradeModal(true)}
+        onLogout={handleLogout}
+        isRefreshing={isLoading || isAutoRefreshing}
+        onRefresh={autoRefresh}
+        lastUpdated={attendanceData.lastUpdated}
+        canRefresh={premiumStatus.canRefresh}
+      />
 
-      {/* Main content */}
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-5">
-        {/* Student Info */}
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-5">
         <StudentInfo
           student={attendanceData.student}
           lastUpdated={attendanceData.lastUpdated}
         />
 
-        {/* Auto-refresh indicator */}
-        {isAutoRefreshing && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-sm">
-            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Updating attendance data...
-          </div>
-        )}
-
-        {/* Today's Classes */}
         {hasTimetable ? (
           <PremiumGate isPremium={premiumStatus.isPremium} onUpgradeClick={() => setShowUpgradeModal(true)}>
             <TodayCard
@@ -578,7 +504,6 @@ export default function Home() {
           </button>
         )}
 
-        {/* Overall Stats */}
         <OverallStats
           subjects={attendanceData.subjects}
           globalThreshold={threshold}
@@ -587,7 +512,6 @@ export default function Home() {
           onFilterChange={setActiveFilter}
         />
 
-        {/* Threshold indicator */}
         <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           <span>Default threshold:</span>
           <span className="font-semibold text-slate-900 dark:text-white">{threshold}%</span>
@@ -604,14 +528,12 @@ export default function Home() {
           )}
         </div>
 
-        {/* Status Filter */}
         <StatusFilter
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
           counts={statusCounts}
         />
 
-        {/* Attendance Cards */}
         <div className="grid gap-3">
           {filteredSubjects.length > 0 ? (
             filteredSubjects.map((subject, index) => {
@@ -639,12 +561,22 @@ export default function Home() {
           )}
         </div>
 
+        {hasTimetable && (
+          <PremiumGate isPremium={premiumStatus.isPremium} onUpgradeClick={() => setShowUpgradeModal(true)}>
+            <VacationPlanner
+              subjects={attendanceData.subjects}
+              timetable={timetable}
+              globalThreshold={threshold}
+              subjectThresholds={subjectThresholds}
+            />
+          </PremiumGate>
+        )}
+
         <p className="text-center text-[10px] text-slate-400 dark:text-slate-600 mt-6 pb-4">
           © 2026 0xMoni
         </p>
       </main>
 
-      {/* Threshold Modal */}
       <ThresholdModal
         isOpen={showThresholdModal}
         currentThreshold={threshold}
@@ -652,7 +584,6 @@ export default function Home() {
         onSave={handleThresholdSave}
       />
 
-      {/* Timetable Setup Modal */}
       <TimetableSetup
         isOpen={showTimetableSetup}
         onClose={() => setShowTimetableSetup(false)}
@@ -663,7 +594,6 @@ export default function Home() {
         onUpgradeClick={() => { setShowTimetableSetup(false); setShowUpgradeModal(true); }}
       />
 
-      {/* Upgrade Modal */}
       <UpgradeModal
         isOpen={showUpgradeModal}
         onClose={() => setShowUpgradeModal(false)}
@@ -673,8 +603,6 @@ export default function Home() {
         currentPremiumUntil={premiumUntil}
         onPaymentSuccess={handlePaymentSuccess}
       />
-
-      {errorToast}
     </div>
   );
 }

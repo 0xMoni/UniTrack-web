@@ -214,22 +214,61 @@ async function tryJunoFlow(
       cache: 'no-store',
     }, 8_000).then(async (res) => {
       if (!res.ok) return null;
-      const academic: AcademicInfoResponse = await res.json();
-      if (academic.hasAcademicInfo) return academic.AcademicInfo.rollNo || '';
+      const text = await res.text();
+      try {
+        const academic = JSON.parse(text);
+        if (academic.hasAcademicInfo) {
+          const info = academic.AcademicInfo;
+          return { rollNo: info.rollNo || '', name: info.studentName || info.name || '' };
+        }
+      } catch { /* not JSON */ }
       return null;
     }).catch(() => null);
 
     // Parse student name from dashboard HTML (instant, no network)
     try {
-      const nameMatch = dashHtml.match(/studentName"?\s+value="([^"]+)"/i);
-      if (nameMatch?.[1]) {
-        studentName = nameMatch[1].replace(/\s+/g, ' ').trim();
+      const namePatterns = [
+        /studentName"?\s+value="([^"]+)"/i,
+        /id="?studentName"?[^>]*>([^<]+)</i,
+        /name="?studentName"?\s+value="([^"]+)"/i,
+        /Welcome[,\s]+([A-Z][A-Za-z\s]+?)(?:<|,|\s*\()/,
+        /studentname[^>]*>\s*([^<]+)/i,
+        /class="?student[_-]?name"?[^>]*>([^<]+)</i,
+      ];
+      for (const pattern of namePatterns) {
+        const match = dashHtml.match(pattern);
+        if (match?.[1] && match[1].trim().length > 1 && match[1].trim() !== 'Student') {
+          studentName = match[1].replace(/\s+/g, ' ').trim();
+          break;
+        }
       }
     } catch { /* ignore */ }
 
     const [speculativeResult, academicResult] = await Promise.all([speculativeFetch, academicFetch]);
 
-    if (academicResult) rollNo = academicResult;
+    if (academicResult) {
+      rollNo = academicResult.rollNo;
+      if (academicResult.name && studentName === 'Student') {
+        studentName = academicResult.name.replace(/\s+/g, ' ').trim();
+      }
+    }
+
+    // Last resort: try student profile endpoint if name still not found
+    if (studentName === 'Student') {
+      try {
+        const profileRes = await fetchWithTimeout(`${erpBase}/stu_getStudPersonalNew.json`, {
+          headers: { 'Cookie': jar.toString() },
+          cache: 'no-store',
+        }, 5_000);
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          const n = profile?.studentName || profile?.name || profile?.StudentPersonal?.studentName || '';
+          if (n && n.trim().length > 1) {
+            studentName = n.replace(/\s+/g, ' ').trim();
+          }
+        }
+      } catch { /* ignore */ }
+    }
 
     let subjectData: SubjectApiResponse[];
 

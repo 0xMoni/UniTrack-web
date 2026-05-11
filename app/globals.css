@@ -132,3 +132,16 @@ body {
 .card-hover:hover {
   transform: translateY(-1px);
 }
+
+/* React Day Picker dark mode */
+.dark .rdp-root {
+  --rdp-accent-color: #6366f1;
+  --rdp-accent-background-color: #312e81;
+  --rdp-day-color: #f1f5f9;
+  --rdp-background-color: transparent;
+}
+
+.rdp-root {
+  --rdp-accent-color: #6366f1;
+  --rdp-accent-background-color: #eef2ff;
+}

@@ -1,11 +1,15 @@
 {
+  "id": "/",
   "name": "UniTrack",
   "short_name": "UniTrack",
   "description": "Universal Attendance Tracker for University ERP Systems",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f9fafb",
   "theme_color": "#6366f1",
+  "categories": ["education", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -16,6 +20,12 @@
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
