@@ -121,18 +121,22 @@ export default function OverallStats({ subjects, globalThreshold, subjectThresho
         })}
       </div>
 
-      {/* Overall projection bar */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700/50">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Overall projection</span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">
-            Next full day ({totalActiveSubjects} classes)
-          </span>
-        </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-slate-500 dark:text-slate-400">Now <span className="font-bold text-slate-900 dark:text-white">{overallPercentage}%</span></span>
-          <span className="text-emerald-500 font-medium">attend all → {afterAttendAll}%</span>
-          <span className="text-red-400 font-medium">skip all → {afterSkipAll}%</span>
+      {/* Overall projection */}
+      <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-700/50">
+        <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">Next Day Projection</p>
+        <div className="grid grid-cols-3 gap-0">
+          <div className="text-center">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Current</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{overallPercentage}%</p>
+          </div>
+          <div className="text-center border-x border-slate-100 dark:border-slate-700">
+            <p className="text-xs text-emerald-500 mb-1">Attend all</p>
+            <p className="text-2xl font-bold text-emerald-500 tabular-nums">{afterAttendAll}%</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-red-400 mb-1">Skip all</p>
+            <p className="text-2xl font-bold text-red-400 tabular-nums">{afterSkipAll}%</p>
+          </div>
         </div>
       </div>
     </div>
