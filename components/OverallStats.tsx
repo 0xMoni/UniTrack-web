@@ -100,8 +100,9 @@ export default function OverallStats({ subjects, globalThreshold, subjectThresho
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {stats.map((stat) => {
-          const isActive = activeFilter !== undefined && activeFilter === stat.filter && stat.filter !== 'all';
+        {stats.map((stat, index) => {
+          const isActive = activeFilter !== undefined && activeFilter === stat.filter && stat.filter !== 'all'
+            && (index === stats.findIndex(s => s.filter === activeFilter));
           const isClickable = !!onFilterChange;
           return (
             <button

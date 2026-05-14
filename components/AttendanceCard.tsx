@@ -45,7 +45,7 @@ export default function AttendanceCard({ subject, threshold, hasCustomThreshold,
         {/* Subject name and percentage */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white leading-tight">
+            <h3 className="font-bold text-slate-900 dark:text-white leading-tight text-[15px]">
               {name}
             </h3>
             {code && (

@@ -32,13 +32,13 @@ export function getStatusColor(status: 'safe' | 'critical' | 'low' | 'no_data'):
 export function getStatusBgColor(status: 'safe' | 'critical' | 'low' | 'no_data'): string {
   switch (status) {
     case 'safe':
-      return 'bg-emerald-500/10 border-emerald-500/20';
+      return 'bg-emerald-500/10 border-emerald-500/40';
     case 'critical':
-      return 'bg-amber-500/10 border-amber-500/20';
+      return 'bg-amber-500/10 border-amber-500/40';
     case 'low':
-      return 'bg-red-500/10 border-red-500/20';
+      return 'bg-red-500/10 border-red-500/40';
     case 'no_data':
-      return 'bg-slate-500/10 border-slate-500/20';
+      return 'bg-slate-500/10 border-slate-500/30';
   }
 }
 
