@@ -144,6 +144,72 @@ function StatCard({
 /*  Dashboard                                                          */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Set Premium Dropdown                                               */
+/* ------------------------------------------------------------------ */
+
+const PREMIUM_OPTIONS = [
+  { label: '1 month', months: 1 },
+  { label: '3 months', months: 3 },
+  { label: '1 year', months: 12 },
+];
+
+function SetPremiumButton({ uid, onDone }: { uid: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSet(months: number) {
+    setBusy(true);
+    try {
+      const password = sessionStorage.getItem('unitrack-admin');
+      const premiumUntil = new Date();
+      premiumUntil.setMonth(premiumUntil.getMonth() + months);
+      const res = await fetch('/api/admin/set-premium', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, uid, premiumUntil: premiumUntil.toISOString() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to set premium');
+      setOpen(false);
+      onDone();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to set premium');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={busy}
+        className="rounded-md border border-slate-600 bg-slate-700/60 px-2 py-1 text-[11px] font-medium text-indigo-300 hover:bg-indigo-600/20 hover:border-indigo-500/50 hover:text-indigo-200 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+      >
+        {busy ? 'Setting...' : 'Set Premium'}
+      </button>
+      {open && !busy && (
+        <div className="absolute right-0 top-full mt-1 z-20 rounded-lg border border-slate-600 bg-slate-800 shadow-xl py-1 min-w-[120px]">
+          {PREMIUM_OPTIONS.map((opt) => (
+            <button
+              key={opt.months}
+              onClick={() => handleSet(opt.months)}
+              className="block w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-indigo-600/30 hover:text-indigo-200 cursor-pointer"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dashboard                                                          */
+/* ------------------------------------------------------------------ */
+
 function Dashboard() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -385,13 +451,14 @@ function Dashboard() {
                   <th className="px-4 py-3 text-right">Refreshes</th>
                   <th className="px-4 py-3 text-right">Payments</th>
                   <th className="px-4 py-3">Last Synced</th>
+                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {filteredUsers.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-4 py-12 text-center text-slate-500"
                     >
                       No users found
@@ -432,6 +499,9 @@ function Dashboard() {
                         </td>
                         <td className="px-4 py-3 text-slate-400">
                           {fmtDate(u.lastSynced || null)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <SetPremiumButton uid={u.uid} onDone={fetchData} />
                         </td>
                       </tr>
                     );

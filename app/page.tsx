@@ -534,14 +534,14 @@ export default function Home() {
           counts={statusCounts}
         />
 
-        <div className="grid gap-3">
+        <div className="grid gap-3" key={activeFilter}>
           {filteredSubjects.length > 0 ? (
             filteredSubjects.map((subject, index) => {
               const key = getSubjectKey(subject);
               const effectiveThreshold = getEffectiveThreshold(subject, threshold, subjectThresholds);
               return (
+                <div key={`${key}-${index}`} className="animate-card-in" style={{ animationDelay: `${index * 50}ms` }}>
                 <AttendanceCard
-                  key={`${key}-${index}`}
                   subject={subject}
                   threshold={effectiveThreshold}
                   hasCustomThreshold={key in subjectThresholds}
@@ -549,14 +549,34 @@ export default function Home() {
                   isPremium={premiumStatus.isPremium}
                   onUpgradeClick={() => setShowUpgradeModal(true)}
                 />
+              </div>
               );
             })
           ) : (
             <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-              <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <p>No subjects match the selected filter</p>
+              {activeFilter === 'safe' ? (
+                <>
+                  <span className="text-4xl block mb-3">📚</span>
+                  <p>No safe subjects yet — keep attending!</p>
+                </>
+              ) : activeFilter === 'critical' ? (
+                <>
+                  <span className="text-4xl block mb-3">🎉</span>
+                  <p>No subjects at risk — nice work!</p>
+                </>
+              ) : activeFilter === 'low' ? (
+                <>
+                  <span className="text-4xl block mb-3">💪</span>
+                  <p>No subjects below threshold — you&apos;re doing great!</p>
+                </>
+              ) : (
+                <>
+                  <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <p>No subjects match the selected filter</p>
+                </>
+              )}
             </div>
           )}
         </div>
