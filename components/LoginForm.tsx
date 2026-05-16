@@ -353,13 +353,27 @@ export default function LoginForm(props: LoginFormProps) {
                 Tell us your college and we&apos;ll add support for it.
               </p>
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
                   const form = e.target as HTMLFormElement;
                   const college = (form.elements.namedItem('college') as HTMLInputElement).value;
                   const erpLink = (form.elements.namedItem('erpLink') as HTMLInputElement).value;
-                  window.open(`mailto:moni.cseds24@cmrit.ac.in?subject=UniTrack: Add ${encodeURIComponent(college)}&body=College: ${encodeURIComponent(college)}%0AERP URL: ${encodeURIComponent(erpLink)}`);
-                  form.reset();
+                  const btn = form.querySelector('button[type=submit]') as HTMLButtonElement;
+                  btn.disabled = true;
+                  btn.textContent = 'Submitting...';
+                  try {
+                    await fetch('/api/college-requests', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ college, erpUrl: erpLink }),
+                    });
+                    form.reset();
+                    btn.textContent = 'Submitted! We’ll add it soon';
+                    btn.classList.add('text-emerald-600', 'dark:text-emerald-400');
+                  } catch {
+                    btn.textContent = 'Failed — try again';
+                    btn.disabled = false;
+                  }
                 }}
                 className="space-y-2"
               >

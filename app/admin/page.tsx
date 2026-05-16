@@ -20,7 +20,16 @@ interface UserRow {
   payments: PaymentRecord[];
 }
 
-type Tab = 'overview' | 'users' | 'payments';
+type Tab = 'overview' | 'users' | 'payments' | 'requests';
+
+interface CollegeRequest {
+  id: string;
+  college: string;
+  erpUrl: string;
+  email: string;
+  createdAt: string;
+  status: string;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -216,6 +225,7 @@ function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [search, setSearch] = useState('');
+  const [collegeRequests, setCollegeRequests] = useState<CollegeRequest[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -230,6 +240,15 @@ function Dashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load data');
       setUsers(data.users);
+
+      // Fetch college requests
+      try {
+        const reqRes = await fetch(`/api/college-requests?password=${password}`);
+        if (reqRes.ok) {
+          const reqData = await reqRes.json();
+          setCollegeRequests(reqData.requests || []);
+        }
+      } catch { /* non-critical */ }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -345,6 +364,7 @@ function Dashboard() {
     { key: 'overview', label: 'Overview' },
     { key: 'users', label: `Users (${stats.total})` },
     { key: 'payments', label: `Payments (${stats.totalPayments})` },
+    { key: 'requests', label: `Requests (${collegeRequests.length})` },
   ];
 
   return (
@@ -506,6 +526,50 @@ function Dashboard() {
                       </tr>
                     );
                   })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ---- Requests Tab ---- */}
+        {tab === 'requests' && (
+          <div className="overflow-x-auto rounded-xl border border-slate-700">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">College</th>
+                  <th className="px-4 py-3">ERP URL</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {collegeRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-12 text-center text-slate-500">
+                      No college requests yet
+                    </td>
+                  </tr>
+                ) : (
+                  collegeRequests.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-800/40">
+                      <td className="px-4 py-3 text-slate-200 font-medium">{r.college}</td>
+                      <td className="px-4 py-3">
+                        <a href={r.erpUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline text-xs font-mono truncate block max-w-[250px]">
+                          {r.erpUrl}
+                        </a>
+                      </td>
+                      <td className="px-4 py-3 text-slate-400">{fmtDate(r.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                          r.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
+                        }`}>
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
