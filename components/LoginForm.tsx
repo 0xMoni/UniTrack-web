@@ -343,6 +343,51 @@ export default function LoginForm(props: LoginFormProps) {
           )}
         </p>
 
+        {mode === 'erp' && (
+          <details className="mt-4 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
+            <summary className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+              My college ERP not working?
+            </summary>
+            <div className="px-4 pb-4 pt-1 space-y-3">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Tell us your college and we&apos;ll add support for it.
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const college = (form.elements.namedItem('college') as HTMLInputElement).value;
+                  const erpLink = (form.elements.namedItem('erpLink') as HTMLInputElement).value;
+                  window.open(`mailto:moni.cseds24@cmrit.ac.in?subject=UniTrack: Add ${encodeURIComponent(college)}&body=College: ${encodeURIComponent(college)}%0AERP URL: ${encodeURIComponent(erpLink)}`);
+                  form.reset();
+                }}
+                className="space-y-2"
+              >
+                <input
+                  name="college"
+                  type="text"
+                  placeholder="College name"
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+                />
+                <input
+                  name="erpLink"
+                  type="url"
+                  placeholder="ERP login URL (e.g. https://erp.college.ac.in)"
+                  required
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 text-sm outline-none focus:ring-2 focus:ring-indigo-500/40"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-2 px-3 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-sm font-medium hover:bg-indigo-500/20 transition-colors"
+                >
+                  Request college support
+                </button>
+              </form>
+            </div>
+          </details>
+        )}
+
         <a
           href="https://github.com/0xMoni/UniTrack-app/releases/latest"
           target="_blank"

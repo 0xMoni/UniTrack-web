@@ -59,6 +59,20 @@ export default function Header({
     };
   }, [menuOpen]);
 
+  const handleShare = async () => {
+    const shareData = {
+      title: 'UniTrack — Attendance Tracker',
+      text: 'Track your college attendance and know which classes you can skip! Try UniTrack:',
+      url: 'https://unitrack-web.vercel.app',
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
+      alert('Link copied to clipboard!');
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-100 dark:border-slate-800">
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -148,6 +162,15 @@ export default function Header({
                     Upgrade to Pro
                   </button>
                 )}
+                <button
+                  onClick={() => { handleShare(); setMenuOpen(false); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-3 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share with friends
+                </button>
                 <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
                 <button
                   onClick={() => { setMenuOpen(false); onLogout(); }}
