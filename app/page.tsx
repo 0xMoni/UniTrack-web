@@ -82,7 +82,27 @@ export default function Home() {
     if (!user) return;
 
     let cancelled = false;
+    const cacheKey = `unitrack_cache_${user.uid}`;
 
+    // Load from local cache FIRST for instant UI
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.attendance) setAttendanceData(data.attendance);
+        if (data.threshold) setThreshold(data.threshold);
+        if (data.subjectThresholds) setSubjectThresholds(data.subjectThresholds);
+        if (data.timetable) setTimetable(data.timetable);
+        if (data.erpUrl) setSavedErpUrl(data.erpUrl);
+        if (data.premiumUntil) setPremiumUntil(data.premiumUntil);
+        if (data.trialEndsAt) setTrialEndsAt(data.trialEndsAt);
+        if (data.refreshCount) setRefreshCount(data.refreshCount);
+        if (data.refreshCountResetMonth) setRefreshCountResetMonth(data.refreshCountResetMonth);
+        setIsInitialized(true);
+      }
+    } catch { /* cache read failed — continue to Firestore */ }
+
+    // Then sync from Firestore in background
     (async () => {
       try {
         const data = await loadUserData(user.uid);
@@ -99,7 +119,12 @@ export default function Home() {
         if (data.refreshCount) setRefreshCount(data.refreshCount);
         if (data.refreshCountResetMonth) setRefreshCountResetMonth(data.refreshCountResetMonth);
 
-        // Migrate localStorage data on first sign-up (if Firestore is empty)
+        // Save to local cache for next load
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+        } catch { /* storage full — non-critical */ }
+
+        // Migrate old localStorage data on first sign-up (if Firestore is empty)
         if (!data.attendance && typeof window !== 'undefined') {
           const localData = localStorage.getItem(STORAGE_KEY);
           if (localData) {
@@ -122,7 +147,6 @@ export default function Home() {
               const localCreds = JSON.parse(localStorage.getItem(CREDENTIALS_KEY) || '{}');
               if (localCreds.username) setSavedUsername(localCreds.username);
 
-              // Persist migrated data to Firestore
               await saveUserData(user.uid, {
                 attendance: parsed,
                 threshold: localThreshold,
@@ -132,21 +156,16 @@ export default function Home() {
                 lastSynced: new Date().toISOString(),
               });
 
-              // Clear localStorage after successful migration
               localStorage.removeItem(STORAGE_KEY);
               localStorage.removeItem(CREDENTIALS_KEY);
               localStorage.removeItem(THRESHOLD_KEY);
               localStorage.removeItem(SUBJECT_THRESHOLDS_KEY);
               localStorage.removeItem(ERP_URL_KEY);
               localStorage.removeItem(TIMETABLE_KEY);
-            } catch {
-              // Ignore migration errors
-            }
+            } catch { /* Ignore migration errors */ }
           }
         }
-      } catch {
-        // Firestore load failed — user will see empty state
-      }
+      } catch { /* Firestore load failed — cached data still shown */ }
 
       if (!cancelled) setIsInitialized(true);
     })();
@@ -192,6 +211,24 @@ export default function Home() {
     if (!isInitialized || !user) return;
     saveUserData(user.uid, { timetable });
   }, [timetable, isInitialized, user]);
+
+  // ── Update local cache for instant next load ──
+  useEffect(() => {
+    if (!isInitialized || !user) return;
+    try {
+      localStorage.setItem(`unitrack_cache_${user.uid}`, JSON.stringify({
+        attendance: attendanceData,
+        threshold,
+        subjectThresholds,
+        timetable,
+        erpUrl: savedErpUrl,
+        premiumUntil,
+        trialEndsAt,
+        refreshCount,
+        refreshCountResetMonth,
+      }));
+    } catch { /* storage full */ }
+  }, [attendanceData, threshold, subjectThresholds, timetable, savedErpUrl, premiumUntil, trialEndsAt, refreshCount, refreshCountResetMonth, isInitialized, user]);
 
   // ── Auth handlers ──
   const handleAuth = async (email: string, password: string, isSignUp: boolean) => {
