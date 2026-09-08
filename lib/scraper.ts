@@ -89,6 +89,22 @@ export function pickLatestTerm(termNames: string[]): string {
   return best ?? termNames[termNames.length - 1];
 }
 
+// Resolves which term the student is currently in, without ever asking them.
+//
+// The ERP's academic-info endpoint reports the current semester directly, so
+// trust that first — it is authoritative and survives odd term orderings,
+// backlogs and re-registrations. Only when it is missing or unreadable do we
+// fall back to inferring the newest term from the attendance rows.
+export function resolveCurrentTerm(termNames: string[], erpSemesterName?: string): string {
+  const declared = semesterNumber(erpSemesterName || '');
+  if (declared > 0) {
+    const match = termNames.find(t => semesterNumber(t) === declared);
+    if (match) return match;
+  }
+
+  return pickLatestTerm(termNames);
+}
+
 // Simple cookie jar
 class CookieJar {
   private cookies = new Map<string, string>();
@@ -240,6 +256,8 @@ async function tryJunoFlow(
     // Step 4: Run academic info, name parse, and speculative attendance fetch in parallel
     let studentName = 'Student';
     let rollNo = '';
+    // What the ERP itself says the student's current semester is.
+    let erpSemesterName = '';
 
     const dashHtml = await dashboard.text();
 
@@ -267,7 +285,11 @@ async function tryJunoFlow(
         const academic = JSON.parse(text);
         if (academic.hasAcademicInfo) {
           const info = academic.AcademicInfo;
-          return { rollNo: info.rollNo || '', name: info.studentName || info.name || '' };
+          return {
+            rollNo: info.rollNo || '',
+            name: info.studentName || info.name || '',
+            semesterName: info.semesterName || '',
+          };
         }
       } catch { /* not JSON */ }
       return null;
@@ -296,6 +318,7 @@ async function tryJunoFlow(
 
     if (academicResult) {
       rollNo = academicResult.rollNo;
+      erpSemesterName = academicResult.semesterName;
       if (academicResult.name && studentName === 'Student') {
         studentName = academicResult.name.replace(/\s+/g, ' ').trim();
       }
@@ -357,9 +380,9 @@ async function tryJunoFlow(
       return { success: false, error: 'No attendance data found — your ERP account may not have any attendance records yet' };
     }
 
-    // Filter to latest semester
+    // Filter to the student's current semester
     const termNames = [...new Set(subjectData.map(s => s.termName))];
-    const latestTerm = pickLatestTerm(termNames);
+    const latestTerm = resolveCurrentTerm(termNames, erpSemesterName);
     const currentSemData = subjectData.filter(s => s.termName === latestTerm);
 
     const subjects: Subject[] = currentSemData.map((s) => {
