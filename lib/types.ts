@@ -17,6 +17,11 @@ export interface AttendanceData {
   subjects: Subject[];
   lastUpdated: string;
   threshold: number;
+  // Term the subjects below belong to, as the ERP labels it (e.g. "Semester 5").
+  // Optional because data cached before this field existed will not have it.
+  semester?: string;
+  // Every term the ERP returned, for diagnosing a wrong-semester result.
+  availableTerms?: string[];
 }
 
 export interface FetchResponse {
