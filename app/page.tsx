@@ -20,7 +20,7 @@ import { SkeletonDashboard } from '@/components/Skeleton';
 import { useTheme } from '@/lib/useTheme';
 import { useAuth } from '@/lib/useAuth';
 import { loadUserData, saveUserData, saveErpCredentials, loadErpCredentials, incrementRefreshCount, savePayment, subscribeToUserData, PaymentRecord } from '@/lib/firestore';
-import { usePremium } from '@/lib/usePremium';
+import { usePremium, FREE_REFRESHES_PER_MONTH } from '@/lib/usePremium';
 import { AttendanceData, StatusFilter as StatusFilterType, FetchResponse, Timetable } from '@/lib/types';
 import {
   STORAGE_KEY, CREDENTIALS_KEY, THRESHOLD_KEY, SUBJECT_THRESHOLDS_KEY,
@@ -29,6 +29,7 @@ import {
 } from '@/lib/utils';
 
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+const SEMESTER_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // at most one rollover check a day
 
 export default function Home() {
   const { dark, toggle: toggleTheme, mounted } = useTheme();
@@ -307,45 +308,141 @@ export default function Home() {
     }
   }, [threshold, user, attendanceData, premiumStatus.isPremium, refreshCount, refreshCountResetMonth]);
 
-  // ── Auto-refresh callback (best-effort, silent errors) ──
-  const autoRefresh = useCallback(async () => {
-    if (!user || !attendanceData || !premiumStatus.canRefresh) return;
+  // ── Fetch using the stored ERP credentials ──
+  const fetchWithSavedCreds = useCallback(async (): Promise<FetchResponse | null> => {
+    if (!user) return null;
 
-    setIsAutoRefreshing(true);
+    const creds = await loadErpCredentials(user.uid);
+    if (!creds) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25_000);
     try {
-      const creds = await loadErpCredentials(user.uid);
-      if (!creds) return;
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 25_000);
-
       const response = await fetch('/api/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ erpUrl: creds.erpUrl, username: creds.username, password: creds.password, threshold }),
         signal: controller.signal,
       });
+      return await response.json();
+    } finally {
       clearTimeout(timeout);
+    }
+  }, [user, threshold]);
 
-      const result: FetchResponse = await response.json();
+  // ── Spend one of the free tier's monthly refreshes ──
+  const chargeRefresh = useCallback(async () => {
+    if (!user || premiumStatus.isPremium) return;
+    const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const updated = await incrementRefreshCount(user.uid, currentMonth, refreshCount, refreshCountResetMonth);
+    setRefreshCount(updated.refreshCount);
+    setRefreshCountResetMonth(updated.refreshCountResetMonth);
+  }, [user, premiumStatus.isPremium, refreshCount, refreshCountResetMonth]);
 
-      if (result.success && result.data) {
+  // ── Auto-refresh callback (best-effort, silent errors) ──
+  const autoRefresh = useCallback(async () => {
+    if (!user || !attendanceData || !premiumStatus.canRefresh) return;
+
+    setIsAutoRefreshing(true);
+    try {
+      const result = await fetchWithSavedCreds();
+      if (result?.success && result.data) {
         setAttendanceData(result.data);
-
-        // Increment refresh count for free users
-        if (!premiumStatus.isPremium) {
-          const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-          const updated = await incrementRefreshCount(user.uid, currentMonth, refreshCount, refreshCountResetMonth);
-          setRefreshCount(updated.refreshCount);
-          setRefreshCountResetMonth(updated.refreshCountResetMonth);
-        }
+        await chargeRefresh();
       }
     } catch {
       // Silent failure — auto-refresh is best-effort
     } finally {
       setIsAutoRefreshing(false);
     }
-  }, [user, attendanceData, premiumStatus.canRefresh, premiumStatus.isPremium, threshold, refreshCount, refreshCountResetMonth]);
+  }, [user, attendanceData, premiumStatus.canRefresh, fetchWithSavedCreds, chargeRefresh]);
+
+  // ── Manual refresh ──
+  //
+  // Unlike the background refresh this is a deliberate user action, so it must
+  // never no-op in silence: say why nothing happened.
+  const handleManualRefresh = useCallback(async () => {
+    if (!user || !attendanceData || isLoading || isAutoRefreshing) return;
+
+    if (!premiumStatus.canRefresh) {
+      toast.error(
+        `No refreshes left this month (${premiumStatus.refreshesUsed}/${FREE_REFRESHES_PER_MONTH} used). Your allowance resets on the 1st.`,
+        { action: { label: 'Upgrade', onClick: () => setShowUpgradeModal(true) } }
+      );
+      return;
+    }
+
+    setIsAutoRefreshing(true);
+    try {
+      const result = await fetchWithSavedCreds();
+
+      if (result === null) {
+        toast.error('Saved ERP login not found — sign in to your ERP again.');
+        return;
+      }
+      if (!result.success || !result.data) {
+        toast.error(result.error || 'Failed to refresh attendance data');
+        return;
+      }
+
+      const previousSemester = attendanceData.semester;
+      setAttendanceData(result.data);
+      await chargeRefresh();
+
+      if (result.data.semester && previousSemester && result.data.semester !== previousSemester) {
+        toast.success(`New semester detected — now showing ${result.data.semester}.`);
+      } else {
+        toast.success('Attendance updated');
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        toast.error('Request timed out — the ERP server took too long to respond. Try again.');
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Network error — check your connection');
+      }
+    } finally {
+      setIsAutoRefreshing(false);
+    }
+  }, [user, attendanceData, isLoading, isAutoRefreshing, premiumStatus.canRefresh, premiumStatus.refreshesUsed, fetchWithSavedCreds, chargeRefresh]);
+
+  // ── Semester rollover check ──
+  //
+  // Runs even when the monthly refresh allowance is spent. A student who uses
+  // up their refreshes before a new semester begins would otherwise stay
+  // pinned to last semester's subjects until the 1st, with nothing on screen
+  // saying so — which is exactly the moment the data matters most.
+  //
+  // The allowance still means something: the result is only applied when the
+  // semester actually changed. A check that comes back on the same semester is
+  // discarded, so it buys no fresher attendance numbers and costs no refresh.
+  const semesterCheck = useCallback(async () => {
+    if (!user || !attendanceData) return;
+
+    const key = `unitrack_semcheck_${user.uid}`;
+    try {
+      const last = parseInt(localStorage.getItem(key) || '0', 10);
+      if (Date.now() - last < SEMESTER_CHECK_INTERVAL_MS) return;
+    } catch { /* storage unavailable — fall through and check */ }
+
+    try {
+      const result = await fetchWithSavedCreds();
+      try { localStorage.setItem(key, String(Date.now())); } catch { /* storage full */ }
+
+      if (!result?.success || !result.data?.semester) return;
+
+      const previousSemester = attendanceData.semester;
+
+      // Same semester — discard, so the allowance is not quietly bypassed.
+      if (previousSemester && result.data.semester === previousSemester) return;
+
+      setAttendanceData(result.data);
+      if (previousSemester) {
+        toast.success(`New semester detected — now showing ${result.data.semester}.`);
+      }
+    } catch {
+      // Best-effort — a failed check just retries tomorrow.
+    }
+  }, [user, attendanceData, fetchWithSavedCreds]);
 
   // ── Trigger auto-refresh once after initialization if data is stale ──
   useEffect(() => {
@@ -355,10 +452,15 @@ export default function Home() {
     const lastUpdated = new Date(attendanceData.lastUpdated).getTime();
     const age = Date.now() - lastUpdated;
 
-    if (age > STALE_THRESHOLD_MS) {
+    if (age <= STALE_THRESHOLD_MS) return;
+
+    if (premiumStatus.canRefresh) {
       autoRefresh();
+    } else {
+      // Out of refreshes — still find out whether the semester rolled over.
+      semesterCheck();
     }
-  }, [isInitialized, attendanceData, autoRefresh]);
+  }, [isInitialized, attendanceData, autoRefresh, semesterCheck, premiumStatus.canRefresh]);
 
   // ── Logout ──
   const handleLogout = async () => {
@@ -497,7 +599,7 @@ export default function Home() {
         onTimetableClick={() => premiumStatus.isPremium ? setShowTimetableSetup(true) : setShowUpgradeModal(true)}
         onLogout={handleLogout}
         isRefreshing={isLoading || isAutoRefreshing}
-        onRefresh={autoRefresh}
+        onRefresh={handleManualRefresh}
         lastUpdated={attendanceData.lastUpdated}
         canRefresh={premiumStatus.canRefresh}
       />
@@ -506,6 +608,7 @@ export default function Home() {
         <StudentInfo
           student={attendanceData.student}
           lastUpdated={attendanceData.lastUpdated}
+          semester={attendanceData.semester}
         />
 
         {hasTimetable ? (

@@ -6,9 +6,10 @@ import { formatDate } from '@/lib/utils';
 interface StudentInfoProps {
   student: StudentInfoType;
   lastUpdated: string;
+  semester?: string;
 }
 
-export default function StudentInfo({ student, lastUpdated }: StudentInfoProps) {
+export default function StudentInfo({ student, lastUpdated, semester }: StudentInfoProps) {
   return (
     <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-700/50">
       <div className="space-y-1">
@@ -18,6 +19,11 @@ export default function StudentInfo({ student, lastUpdated }: StudentInfoProps) 
         <p className="text-slate-500 dark:text-slate-400 font-mono text-sm">
           {student.usn}
         </p>
+        {semester && (
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 pt-0.5">
+            {semester}
+          </p>
+        )}
         <p className="text-xs text-slate-400 dark:text-slate-500">
           Last updated: {formatDate(lastUpdated)}
         </p>
