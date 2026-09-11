@@ -41,6 +41,70 @@ interface DetectedForm {
   hiddenFields: Record<string, string>;
 }
 
+// ─── Semester ordering ───────────────────────────────────────────────
+//
+// The ERP returns attendance rows for every term the student has been
+// enrolled in, and we only want the current one. The array order is not a
+// reliable signal — JUNO does not guarantee the newest term comes last — so
+// read the semester number out of each term name and take the highest.
+
+const ROMAN_SEM: Record<string, number> = {
+  i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10,
+};
+
+// Returns the semester number in a term name, or 0 if none is recognisable.
+// Handles "Semester 5", "SEM-5", "5th Sem", "Semester V", "V SEM", etc.
+export function semesterNumber(termName: string): number {
+  const t = (termName || '').toLowerCase();
+
+  const digit =
+    t.match(/sem(?:ester)?\s*[-_ ]?\s*(\d{1,2})/) ||
+    t.match(/(\d{1,2})\s*(?:st|nd|rd|th)?\s*[-_ ]?\s*sem/);
+  if (digit) return parseInt(digit[1], 10);
+
+  const roman =
+    t.match(/sem(?:ester)?\s*[-_ ]?\s*([ivx]{1,5})\b/) ||
+    t.match(/\b([ivx]{1,5})\s*[-_ ]?\s*sem/);
+  if (roman) return ROMAN_SEM[roman[1]] ?? 0;
+
+  return 0;
+}
+
+// Picks the most recent term. Falls back to the previous positional
+// behaviour when no term name carries a readable semester number, so an
+// unfamiliar ERP label format can never make this worse than before.
+export function pickLatestTerm(termNames: string[]): string {
+  if (termNames.length <= 1) return termNames[0];
+
+  let best: string | null = null;
+  let bestSem = 0;
+  for (const name of termNames) {
+    const sem = semesterNumber(name);
+    if (sem > bestSem) {
+      bestSem = sem;
+      best = name;
+    }
+  }
+
+  return best ?? termNames[termNames.length - 1];
+}
+
+// Resolves which term the student is currently in, without ever asking them.
+//
+// The ERP's academic-info endpoint reports the current semester directly, so
+// trust that first — it is authoritative and survives odd term orderings,
+// backlogs and re-registrations. Only when it is missing or unreadable do we
+// fall back to inferring the newest term from the attendance rows.
+export function resolveCurrentTerm(termNames: string[], erpSemesterName?: string): string {
+  const declared = semesterNumber(erpSemesterName || '');
+  if (declared > 0) {
+    const match = termNames.find(t => semesterNumber(t) === declared);
+    if (match) return match;
+  }
+
+  return pickLatestTerm(termNames);
+}
+
 // Simple cookie jar
 class CookieJar {
   private cookies = new Map<string, string>();
@@ -192,6 +256,8 @@ async function tryJunoFlow(
     // Step 4: Run academic info, name parse, and speculative attendance fetch in parallel
     let studentName = 'Student';
     let rollNo = '';
+    // What the ERP itself says the student's current semester is.
+    let erpSemesterName = '';
 
     const dashHtml = await dashboard.text();
 
@@ -219,7 +285,11 @@ async function tryJunoFlow(
         const academic = JSON.parse(text);
         if (academic.hasAcademicInfo) {
           const info = academic.AcademicInfo;
-          return { rollNo: info.rollNo || '', name: info.studentName || info.name || '' };
+          return {
+            rollNo: info.rollNo || '',
+            name: info.studentName || info.name || '',
+            semesterName: info.semesterName || '',
+          };
         }
       } catch { /* not JSON */ }
       return null;
@@ -248,6 +318,7 @@ async function tryJunoFlow(
 
     if (academicResult) {
       rollNo = academicResult.rollNo;
+      erpSemesterName = academicResult.semesterName;
       if (academicResult.name && studentName === 'Student') {
         studentName = academicResult.name.replace(/\s+/g, ' ').trim();
       }
@@ -309,9 +380,9 @@ async function tryJunoFlow(
       return { success: false, error: 'No attendance data found — your ERP account may not have any attendance records yet' };
     }
 
-    // Filter to latest semester
+    // Filter to the student's current semester
     const termNames = [...new Set(subjectData.map(s => s.termName))];
-    const latestTerm = termNames[termNames.length - 1];
+    const latestTerm = resolveCurrentTerm(termNames, erpSemesterName);
     const currentSemData = subjectData.filter(s => s.termName === latestTerm);
 
     const subjects: Subject[] = currentSemData.map((s) => {
@@ -341,6 +412,8 @@ async function tryJunoFlow(
         subjects,
         lastUpdated: new Date().toISOString(),
         threshold,
+        semester: latestTerm,
+        availableTerms: termNames,
       },
     };
   } catch (error) {

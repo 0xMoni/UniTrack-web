@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 
-const FREE_REFRESHES_PER_MONTH = 3;
+export const FREE_REFRESHES_PER_MONTH = 3;
 
 interface UsePremiumInput {
   premiumUntil: string | null;
