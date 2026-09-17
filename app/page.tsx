@@ -25,7 +25,7 @@ import { AttendanceData, StatusFilter as StatusFilterType, FetchResponse, Timeta
 import {
   STORAGE_KEY, CREDENTIALS_KEY, THRESHOLD_KEY, SUBJECT_THRESHOLDS_KEY,
   ERP_URL_KEY, TIMETABLE_KEY,
-  calculateStatus, getSubjectKey, getEffectiveThreshold,
+  calculateStatus, getSubjectKey, getEffectiveThreshold, sanitizeTimetable,
 } from '@/lib/utils';
 
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -92,7 +92,7 @@ export default function Home() {
         if (data.attendance) setAttendanceData(data.attendance);
         if (data.threshold) setThreshold(data.threshold);
         if (data.subjectThresholds) setSubjectThresholds(data.subjectThresholds);
-        if (data.timetable) setTimetable(data.timetable);
+        if (data.timetable) setTimetable(sanitizeTimetable(data.timetable, data.attendance?.subjects));
         if (data.erpUrl) setSavedErpUrl(data.erpUrl);
         if (data.premiumUntil) setPremiumUntil(data.premiumUntil);
         if (data.trialEndsAt) setTrialEndsAt(data.trialEndsAt);
@@ -112,7 +112,7 @@ export default function Home() {
         if (data.attendance) setAttendanceData(data.attendance);
         if (data.threshold) setThreshold(data.threshold);
         if (data.subjectThresholds) setSubjectThresholds(data.subjectThresholds);
-        if (data.timetable) setTimetable(data.timetable);
+        if (data.timetable) setTimetable(sanitizeTimetable(data.timetable, data.attendance?.subjects));
         if (data.erpUrl) setSavedErpUrl(data.erpUrl);
         if (data.premiumUntil) setPremiumUntil(data.premiumUntil);
         if (data.trialEndsAt) setTrialEndsAt(data.trialEndsAt);
@@ -138,7 +138,10 @@ export default function Home() {
               const localSubThresholds = JSON.parse(localStorage.getItem(SUBJECT_THRESHOLDS_KEY) || '{}');
               setSubjectThresholds(localSubThresholds);
 
-              const localTimetable = JSON.parse(localStorage.getItem(TIMETABLE_KEY) || '{}');
+              const localTimetable = sanitizeTimetable(
+                JSON.parse(localStorage.getItem(TIMETABLE_KEY) || '{}'),
+                parsed.subjects,
+              );
               setTimetable(localTimetable);
 
               const localErpUrl = localStorage.getItem(ERP_URL_KEY) || '';

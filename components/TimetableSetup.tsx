@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Subject, Timetable } from '@/lib/types';
-import { getSubjectKey } from '@/lib/utils';
+import { getSubjectKey, sanitizeTimetable } from '@/lib/utils';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -28,7 +28,7 @@ export default function TimetableSetup({ isOpen, onClose, onSave, subjects, curr
 
   useEffect(() => {
     if (isOpen) {
-      setDraft(JSON.parse(JSON.stringify(currentTimetable)));
+      setDraft(sanitizeTimetable(currentTimetable, subjects));
       const jsDay = new Date().getDay();
       const mapped = jsDay === 0 ? 5 : jsDay - 1;
       setActiveDay(Math.min(mapped, 5));
@@ -36,7 +36,7 @@ export default function TimetableSetup({ isOpen, onClose, onSave, subjects, curr
       setParseError(null);
       setPreviewUrl(null);
     }
-  }, [isOpen, currentTimetable]);
+  }, [isOpen, currentTimetable, subjects]);
 
   if (!isOpen) return null;
 
@@ -53,7 +53,7 @@ export default function TimetableSetup({ isOpen, onClose, onSave, subjects, curr
   };
 
   const handleSave = () => {
-    onSave(draft);
+    onSave(sanitizeTimetable(draft, subjects));
     onClose();
   };
 
@@ -85,7 +85,7 @@ export default function TimetableSetup({ isOpen, onClose, onSave, subjects, curr
       const result = await res.json();
 
       if (result.success) {
-        setDraft(result.timetable);
+        setDraft(sanitizeTimetable(result.timetable, subjects));
         setShowUpload(false);
         setPreviewUrl(null);
       } else {
