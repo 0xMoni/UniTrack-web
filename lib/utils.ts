@@ -1,4 +1,4 @@
-import { Subject } from './types';
+import { Subject, Timetable } from './types';
 
 const BUFFER = 5; // Buffer percentage above threshold
 
@@ -116,4 +116,45 @@ export function getEffectiveThreshold(
 ): number {
   const key = getSubjectKey(subject);
   return subjectThresholds[key] ?? globalThreshold;
+}
+
+// Normalizes a timetable coming from storage or the AI scanner: keeps days 0-5,
+// drops blank/unknown codes, and collapses duplicates so a subject is counted
+// once per day (the scanner can emit the same code for every time slot).
+export function sanitizeTimetable(
+  raw: Timetable | null | undefined,
+  subjects?: Subject[]
+): Timetable {
+  // Maps lowercased code/name -> the canonical key used everywhere else
+  const canonical = new Map<string, string>();
+  for (const subject of subjects ?? []) {
+    const key = getSubjectKey(subject);
+    if (!key) continue;
+    canonical.set(key.trim().toLowerCase(), key);
+    if (subject.code) canonical.set(subject.code.trim().toLowerCase(), key);
+    if (subject.name) canonical.set(subject.name.trim().toLowerCase(), key);
+  }
+
+  const clean: Timetable = {};
+  for (let day = 0; day <= 5; day++) {
+    const codes = raw?.[day];
+    if (!Array.isArray(codes)) {
+      clean[day] = [];
+      continue;
+    }
+    const seen = new Set<string>();
+    const dayCodes: string[] = [];
+    for (const entry of codes) {
+      if (typeof entry !== 'string') continue;
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+      // Without a subject list (e.g. before attendance loads) keep codes as-is
+      const key = canonical.size > 0 ? canonical.get(trimmed.toLowerCase()) : trimmed;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      dayCodes.push(key);
+    }
+    clean[day] = dayCodes;
+  }
+  return clean;
 }

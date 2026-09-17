@@ -93,16 +93,32 @@ If a day has no classes, use an empty array.`;
 
     const parsed = JSON.parse(jsonStr);
 
+    // Lowercased code -> canonical code, so casing/whitespace drift still matches
+    const knownCodes = new Map<string, string>();
+    for (const code of Array.isArray(subjectCodes) ? subjectCodes : []) {
+      if (typeof code === 'string' && code.trim()) {
+        knownCodes.set(code.trim().toLowerCase(), code);
+      }
+    }
+
     // Validate structure
     const timetable: Record<number, string[]> = {};
     for (let i = 0; i <= 5; i++) {
       const key = String(i);
+      const dayCodes: string[] = [];
       if (Array.isArray(parsed[key])) {
-        // Only keep codes that exist in the known list
-        timetable[i] = parsed[key].filter((c: string) => subjectCodes.includes(c));
-      } else {
-        timetable[i] = [];
+        const seen = new Set<string>();
+        for (const raw of parsed[key]) {
+          if (typeof raw !== 'string') continue;
+          // Only keep known codes, and only once per day even if the model
+          // repeats a subject for each of its time slots
+          const code = knownCodes.get(raw.trim().toLowerCase());
+          if (!code || seen.has(code)) continue;
+          seen.add(code);
+          dayCodes.push(code);
+        }
       }
+      timetable[i] = dayCodes;
     }
 
     return NextResponse.json({ success: true, timetable });
