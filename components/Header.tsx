@@ -171,6 +171,18 @@ export default function Header({
                   </svg>
                   Share with friends
                 </button>
+                <a
+                  href="https://github.com/0xMoni/UniTrack-app/releases/latest"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                  className="w-full px-4 py-2.5 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-3 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download Android App
+                </a>
                 <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
                 <button
                   onClick={() => { setMenuOpen(false); onLogout(); }}
