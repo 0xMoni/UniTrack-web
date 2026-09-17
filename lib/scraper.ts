@@ -41,6 +41,60 @@ interface DetectedForm {
   hiddenFields: Record<string, string>;
 }
 
+const ROMAN_SEMESTERS: Record<string, number> = {
+  i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8,
+};
+
+// Pulls a semester number out of strings like "5th Sem", "SEM-5", "Semester V"
+export function parseSemesterNumber(raw: string): number | null {
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+
+  // "5th sem" / "sem 5" / "semester-5"
+  const labelled = s.match(/(\d{1,2})\s*(?:st|nd|rd|th)?\s*sem|sem(?:ester)?\s*[-\u2013]?\s*(\d{1,2})/);
+  if (labelled) {
+    const n = parseInt(labelled[1] ?? labelled[2], 10);
+    if (n >= 1 && n <= 12) return n;
+  }
+
+  // A bare 1-2 digit number; \b...\b keeps years like 2026 out
+  const bare = s.match(/\b(\d{1,2})\b/);
+  if (bare) {
+    const n = parseInt(bare[1], 10);
+    if (n >= 1 && n <= 12) return n;
+  }
+
+  // Roman numerals, longest first so "vii" doesn't match as "v"
+  const roman = s.match(/\b(viii|vii|vi|iv|v|iii|ii|i)\b/);
+  if (roman) return ROMAN_SEMESTERS[roman[1]] ?? null;
+
+  return null;
+}
+
+// The ERP does not guarantee an order for its term rows, so taking the last one
+// can land on a previous semester. Trust the ERP's own current semester first,
+// then the highest semester number, and only then fall back to arrival order.
+export function pickCurrentTerm(termNames: string[], semesterName: string): string {
+  const target = parseSemesterNumber(semesterName);
+  if (target !== null) {
+    const match = termNames.find(t => parseSemesterNumber(t) === target);
+    if (match) return match;
+  }
+
+  let best: string | null = null;
+  let bestNumber = -1;
+  for (const term of termNames) {
+    const n = parseSemesterNumber(term);
+    if (n !== null && n > bestNumber) {
+      bestNumber = n;
+      best = term;
+    }
+  }
+  if (best) return best;
+
+  return termNames[termNames.length - 1];
+}
+
 // Simple cookie jar
 class CookieJar {
   private cookies = new Map<string, string>();
@@ -219,7 +273,11 @@ async function tryJunoFlow(
         const academic = JSON.parse(text);
         if (academic.hasAcademicInfo) {
           const info = academic.AcademicInfo;
-          return { rollNo: info.rollNo || '', name: info.studentName || info.name || '' };
+          return {
+            rollNo: info.rollNo || '',
+            name: info.studentName || info.name || '',
+            semesterName: info.semesterName || '',
+          };
         }
       } catch { /* not JSON */ }
       return null;
@@ -246,8 +304,11 @@ async function tryJunoFlow(
 
     const [speculativeResult, academicResult] = await Promise.all([speculativeFetch, academicFetch]);
 
+    let currentSemesterName = '';
+
     if (academicResult) {
       rollNo = academicResult.rollNo;
+      currentSemesterName = academicResult.semesterName;
       if (academicResult.name && studentName === 'Student') {
         studentName = academicResult.name.replace(/\s+/g, ' ').trim();
       }
@@ -309,9 +370,9 @@ async function tryJunoFlow(
       return { success: false, error: 'No attendance data found — your ERP account may not have any attendance records yet' };
     }
 
-    // Filter to latest semester
+    // Filter to the current semester
     const termNames = [...new Set(subjectData.map(s => s.termName))];
-    const latestTerm = termNames[termNames.length - 1];
+    const latestTerm = pickCurrentTerm(termNames, currentSemesterName);
     const currentSemData = subjectData.filter(s => s.termName === latestTerm);
 
     const subjects: Subject[] = currentSemData.map((s) => {
